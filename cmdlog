@@ -97,6 +97,14 @@ process_awk() {
         # Filter temp file noise (e.g., cp /tmp/tmp.XXX /tmp/tmp.YYY)
         if (cmd ~ /\/tmp\/tmp\./) next
         
+        # Filter cmdlog internal pipeline commands
+        if (cmd ~ /^grep -E \^type=\(EXECVE\|PROCTITLE\)/) next
+        if (cmd ~ /^sudo ausearch -k clawdbot_exec/) next
+        if (cmd ~ /^comm -23 \/dev\/fd\//) next
+        if (cmd ~ /^sleep [0-9]/) next
+        if (cmd ~ /^awk -v limit=/) next
+        if (cmd ~ /^tail -[0-9]/) next
+        
         if (cmd ~ /cmdlog/) next
         if (cmd == "bash" || cmd == "sh") next
         if (cmd ~ /^bash -[lc]$/) next
