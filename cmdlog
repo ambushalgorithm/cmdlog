@@ -71,15 +71,27 @@ process_awk() {
             ts = strftime("%m/%d %H:%M", m[1])
         }
         
-        # Command + args
+        # Command + args - handle both quoted "value" and unquoted hex
         cmd = ""
         for (i=0; i<=5; i++) {
-            pattern = "a" i "=\"([^\"]+)\""
-            if (match($0, pattern, m)) {
+            arg = ""
+            # Try quoted form first: a0="value"
+            pattern_quoted = "a" i "=\"([^\"]+)\""
+            # Try unquoted form: a2=hexvalue
+            pattern_unquoted = "a" i "=([0-9a-fA-F]+)"
+            
+            if (match($0, pattern_quoted, m)) {
                 arg = m[1]
-                if (arg ~ /^[0-9a-f]+$/ && length(arg) > 4) {
+            } else if (match($0, pattern_unquoted, m)) {
+                arg = m[1]
+            }
+            
+            if (arg != "") {
+                # Hex decode if needed
+                if (arg ~ /^[0-9a-fA-F]+$/ && length(arg) > 4) {
                     arg = hex_decode(arg)
-                    if (arg !~ /[[:print:][:space:]]/) arg = ""
+                    # Allow printable + space + tab + newline
+                    if (arg !~ /^[[:print:][:space:]]+$/) arg = ""
                 }
                 if (i == 0) gsub(/.*\//, "", arg)
                 if (arg != "") cmd = (cmd == "" ? arg : cmd " " arg)
