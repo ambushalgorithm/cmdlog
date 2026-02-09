@@ -96,7 +96,7 @@ process_awk() {
         # Filter utilities
         first = cmd
         sub(/ .*/, "", first)
-        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep)$/) next
+        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep|mv|cp|rm|mkdir|rmdir)$/) next
         if (cmd ~ /cmdlog/) next
         if (cmd == "bash" || cmd == "sh") next
         if (cmd ~ /^bash -[lc]$/) next
@@ -150,11 +150,12 @@ cmd_live() {
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
         grep -E "^type=(EXECVE|PROCTITLE)" | tail -50 > "$curr"
         
-        # Show only lines in curr that are NOT in prev (new commands)
+        # Show only new commands (in curr but not in prev)
         comm -23 <(sort "$curr") <(sort "$prev") | process_awk 0
         
-        # Update prev for next iteration  
-        cp "$curr" "$prev"
+        # Swap: prev becomes curr for next iteration (avoids cp)
+        mv "$curr" "$prev" 2>/dev/null || true
+        touch "$curr"
     done
 }
 
