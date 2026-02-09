@@ -86,12 +86,13 @@ process_awk() {
             }
         }
         
-        # Check if we have a proctitle for bash/sh commands
+        # Check if we have a proctitle for bash/sh commands - show BOTH decoded and raw
         if ((cmd ~ /^bash / || cmd ~ /^sh /) && proctitle_cmd != "") {
+            # Show decoded builtin command
             print last_ts " | [builtin] " proctitle_cmd
             proctitle_cmd = ""
             if (limit > 0 && ++count >= limit) exit
-            next
+            # Also continue to show the regular bash -c form below
         }
         
         # Filter temp file noise (e.g., cp /tmp/tmp.XXX /tmp/tmp.YYY)
