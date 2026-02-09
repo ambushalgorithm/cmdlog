@@ -105,6 +105,9 @@ process_awk() {
         if (cmd ~ /^git maintenance run --auto --no-quiet$/) next
         if (cmd ~ /^dirname /) next
         if (cmd ~ /openclaw-cmdlog/) next
+        # Filter OpenClaw heartbeat/monitoring commands
+        if (cmd ~ /sessions list --active-minutes/) next
+        if (cmd ~ /openclaw\.mjs sessions list/) next
         
         if (cmd != "") {
             print ts " | " cmd
