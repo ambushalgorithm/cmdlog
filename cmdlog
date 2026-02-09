@@ -121,6 +121,10 @@ process_awk() {
         if (cmd ~ /^mktemp/) next
         if (cmd ~ /^sh -c ip neigh show/) next
         if (cmd ~ /^ip neigh show/) next
+        if (cmd ~ /^ip link show/) next
+        if (cmd ~ /^wc -l$/) next
+        if (cmd ~ /^head -2$/) next
+        if (cmd ~ /^head -3$/) next
         
         if (cmd ~ /cmdlog/) next
         
