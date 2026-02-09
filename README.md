@@ -83,8 +83,8 @@ alias openclaw-cmdlog-raw='openclaw-cmdlog --raw'
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/openclaw-cmdlog ~/.local/bin/openclaw-cmdlog
-# Or any directory in your PATH
+# Clone to any directory in your PATH
+git clone https://github.com/crayon-doing-petri/openclaw-cmdlog.git
 ```
 
 Make sure the directory is in your PATH:
