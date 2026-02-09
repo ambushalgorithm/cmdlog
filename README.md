@@ -15,7 +15,7 @@ cmdlog 50
 cmdlog --all
 
 # Search for commands
-cmdlog --grep git
+cmdlog --search git
 
 # Raw audit format
 cmdlog --raw 100
@@ -30,7 +30,7 @@ cmdlog --live
 |---------|-------------|-------|
 | `cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
 | `cmdlog --all` | All of today's commands | 🐢 Slow |
-| `cmdlog --grep pattern` | Search recent commands | ⚡ Fast |
+| `cmdlog --search pattern` | Search recent commands | ⚡ Fast |
 | `cmdlog --live` | Real-time watch | ⚡ Fast |
 | `cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
 
@@ -45,10 +45,12 @@ Then use:
 ```bash
 cmdlog-recent   # = cmdlog --recent 200
 cmdlog-today    # = cmdlog --today
-cmdlog-grep     # = cmdlog --grep
+cmdlog-search   # = cmdlog --search
 cmdlog-live     # = cmdlog --live
 cmdlog-raw      # = cmdlog --raw
 ```
+
+**Note:** `cmdlog-grep` still works as a legacy alias for backward compatibility.
 
 ## Installation
 
@@ -85,3 +87,8 @@ Timestamps in local time (Bogota/UTC-5).
 ## Repo Location
 
 `~/Projects/cmdlog/` - Track your own changes with git.
+
+## Legacy
+
+- `--grep` still works as an alias for `--search`
+- `cmdlog-grep` alias still works

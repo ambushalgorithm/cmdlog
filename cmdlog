@@ -13,11 +13,11 @@ USAGE:
     cmdlog --all            All of today's commands (slow)
     cmdlog --today [N]      Today's commands (default: 1000)
     cmdlog --recent [N]     Last N commands (default: 200)
-    cmdlog --grep PATTERN   Search for pattern
+    cmdlog --search PATTERN Search for pattern
     cmdlog --live           Real-time watch
     cmdlog --raw [N]        Raw format
 
-ALIASES: cmdlog-recent, cmdlog-today, cmdlog-grep, cmdlog-live
+ALIASES: cmdlog-recent, cmdlog-today, cmdlog-search, cmdlog-live
 EOF
 }
 
@@ -101,9 +101,9 @@ cmd_all() {
 
 cmd_recent() { cmd_main "${1:-200}"; }
 
-cmd_grep() {
+cmd_search() {
     local pat="${1:-}"
-    [ -z "$pat" ] && { echo "Usage: cmdlog --grep PATTERN"; exit 1; }
+    [ -z "$pat" ] && { echo "Usage: cmdlog --search PATTERN"; exit 1; }
     echo "Searching for: $pat"
     cmd_main 1000 | grep -i "$pat"
 }
@@ -141,7 +141,8 @@ case "${1:-}" in
             cmd_main 1000
         fi
         ;;
-    --grep) cmd_grep "$2" ;;
+    --search) cmd_search "$2" ;;
+    --grep) cmd_search "$2" ;;  # Legacy alias
     --live) cmd_live ;;
     --raw) cmd_raw "$2" ;;
     "") cmd_main 1000 ;;

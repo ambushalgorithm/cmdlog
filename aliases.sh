@@ -8,6 +8,8 @@ case ":$PATH:" in *":$HOME/Projects/cmdlog:") ;; *) export PATH="$HOME/Projects/
 # Aliases
 alias cmdlog-recent='cmdlog --recent'
 alias cmdlog-today='cmdlog --today'
-alias cmdlog-grep='cmdlog --grep'
+alias cmdlog-search='cmdlog --search'
 alias cmdlog-live='cmdlog --live'
 alias cmdlog-raw='cmdlog --raw'
+# Legacy alias for backward compatibility
+alias cmdlog-grep='cmdlog --search'
