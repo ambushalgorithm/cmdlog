@@ -190,6 +190,8 @@ get_recent_commands() {
 # Args: $1 = search pattern
 search_commands() {
     local pattern="$1"
+    local count=0
+    local max_results=500  # Limit search results to prevent spam
     
     if [ -z "$pattern" ]; then
         echo "Error: No search pattern provided" >&2
@@ -197,13 +199,15 @@ search_commands() {
         return 1
     fi
     
-    echo "Searching for: $pattern"
-    echo "======================="
+    echo "Searching for: $pattern (max $max_results results)"
+    echo "=================================================="
     
-    # Search through all of today's logs (no limit)
+    # Search backwards from end of log (more likely to find recent matches)
+    # Process last 10k entries to find matches quickly
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
     grep "^type=EXECVE" | \
-    while read -r line; do
+    tac | \
+    while read -r line && [ $count -lt $max_results ]; do
         formatted=$(format_command "$line")
         [ -z "$formatted" ] && continue
         
@@ -215,8 +219,9 @@ search_commands() {
         # Only output if matches pattern (case insensitive)
         if echo "$cmd_part" | grep -qi "$pattern"; then
             echo "$formatted"
+            ((count++))
         fi
-    done
+    done | tac  # Reverse back to chronological order
 }
 
 # Real-time live monitor
