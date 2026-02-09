@@ -14,260 +14,177 @@
 # Location: ~/Projects/cmdlog/cmdlog
 #
 
-# Default timezone for timestamps (use system timezone)
+# Default timezone for timestamps
 export TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
-# Filter patterns - commands to exclude from output
-# Only filter pure utility commands, not bash/sh which may contain user commands
-FILTER_WORDS="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq|wc|tac"
-FILTER_WORDS="${FILTER_WORDS}|sudo|ip|locale-check|dirname|node|python3|env|jq|flock|ssh"
+# Filter - only pure utilities, NOT bash/sh
+FILTER="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq|wc|tac|sudo|ip|locale-check|dirname|node|python3|env|jq|flock|ssh"
 
-# Show help/usage
+# Show help
 show_help() {
     cat << 'EOF'
 cmdlog - View clawdbot command audit logs
 
 USAGE:
-    cmdlog [N]                  Show recent N commands (default: 1000)
-    cmdlog --all                Show all of today's commands (may be slow)
-    cmdlog --recent [N]         Last N commands (default: 200)
-    cmdlog --today [N]          Today's commands, limited to N
-    cmdlog --grep <pattern>     Search for commands matching pattern
-    cmdlog --live               Real-time watch mode
+    cmdlog [N]                  Show last N commands (default: 1000)
+    cmdlog --all                Show all of today's commands
+    cmdlog --recent [N]         Last N commands (default: 200)  
+    cmdlog --grep <pattern>     Search for pattern in recent commands
+    cmdlog --live               Real-time watch
     cmdlog --raw [N]            Raw audit format
-    cmdlog --help               Show this help
-
-ALIASES:
-    cmdlog-recent  = cmdlog --recent 200
-    cmdlog-today   = cmdlog --today
-    cmdlog-grep    = cmdlog --grep
-    cmdlog-live    = cmdlog --live
+    cmdlog --help               Show help
 
 EXAMPLES:
-    cmdlog                      # Last 1000 commands (fast)
-    cmdlog 50                   # Just the last 50
-    cmdlog --all                # All of today's commands (slow)
-    cmdlog --grep "git commit"  # Find git push commands
-    cmdlog --live               # Watch new commands in real-time
+    cmdlog                      # Last 1000 commands
+    cmdlog 50                   # Last 50 only
+    cmdlog --all | less         # Everything (slow, pipe to less)
+    cmdlog --grep git           # Find git commands
 
 NOTES:
-    - Default shows last 1000 commands for speed
+    - Default is limited to 1000 for speed (reading 195k entries takes minutes)
     - Use --all to see everything (may take 30+ seconds)
-    - Timestamps are in local timezone (Bogota/UTC-5)
-    - Filtering removes internal system noise but keeps bash commands
+    - bash and sh commands are now shown (previously filtered)
 EOF
 }
 
-# Extract and format command from audit log line
-format_command() {
+# Extract and format a command line from audit output
+format_line() {
     local line="$1"
-    local ts_epoch ts cmd a0 arg decoded
+    local ts_epoch ts a0 arg cmd decoded
     
+    # Get timestamp
     ts_epoch=$(echo "$line" | grep -oP 'msg=audit\(\K[0-9]+(?=\.)')
-    [ -z "$ts_epoch" ] && return 1
-    
+    [ -z "$ts_epoch" ] && return
     ts=$(date -d "@$ts_epoch" "+%m/%d %H:%M" 2>/dev/null)
-    [ -z "$ts" ] && return 1
+    [ -z "$ts" ] && return
     
+    # Get command (a0)
     a0=$(echo "$line" | grep -oP 'a0="\K[^"]+' | head -1)
-    [ -z "$a0" ] && return 1
+    [ -z "$a0" ] && return
     
-    # Remove common path prefixes
-    a0=${a0#/usr/bin/}
-    a0=${a0#/bin/}
-    a0=${a0#/usr/lib/git-core/}
-    a0=${a0#/usr/lib/openssh/}
+    # Clean path
+    a0=${a0##*/}
     
+    # Build full command with args
     cmd="$a0"
-    
-    # Add arguments a1-a5
-    for i in 1 2 3 4 5; do
+    for i in 1 2 3 4 5 6; do
         arg=$(echo "$line" | grep -oP "a$i=\"\K[^\"]+" | head -1)
         [ -z "$arg" ] && continue
         
-        # Decode hex-encoded arguments
-        if [[ "$arg" =~ ^[0-9a-fA-F]+$ ]] && [ ${#arg} -gt 4 ] && [ $(( ${#arg} % 2 )) -eq 0 ]; then
-            decoded=$(printf '%s' "$arg" | xxd -r -p 2>/dev/null | tr -d '\0\n')
-            [ -n "$decoded" ] && [[ "$decoded" =~ ^[[:print:][:space:]]+$ ]] && arg="$decoded"
+        # Decode hex if needed
+        if [[ "$arg" =~ ^[0-9a-f]+$ ]] && [ ${#arg} -gt 4 ]; then
+            decoded=$(echo "$arg" | xxd -r -p 2>/dev/null | tr -d '\0')
+            [ -n "$decoded" ] && arg="$decoded"
         fi
         
         cmd="$cmd $arg"
     done
     
-    # Clean up whitespace
+    # Clean up
     cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-    [ -z "$cmd" ] && return 1
-    [ ${#cmd} -lt 2 ] && return 1
+    [ ${#cmd} -lt 2 ] && return
+    
+    # Filter check
+    local first="${cmd%% *}"
+    [[ "$first" =~ ^($FILTER)$ ]] && return
+    [[ "$cmd" =~ cmdlog ]] && return
+    
+    # Filter empty shells
+    [ "$cmd" = "bash" ] && return
+    [ "$cmd" = "sh" ] && return
+    [ "$cmd" = "bash -c" ] && return
+    [ "$cmd" = "bash -lc" ] && return
+    [ "$cmd" = "sh -c" ] && return
     
     echo "$ts | $cmd"
 }
 
-# Check if command should be filtered
-should_filter() {
-    local cmd="$1"
-    local first_word="${cmd%% *}"
+# Main command - show recent N entries
+cmdlog_main() {
+    local n="${1:-1000}"
     
-    # Check against filter list (utilities only, not bash/sh)
-    if [[ "$first_word" =~ ^(${FILTER_WORDS})$ ]]; then
-        return 0
-    fi
-    
-    # Filter cmdlog self-references
-    if [[ "$cmd" =~ cmdlog ]]; then
-        return 0
-    fi
-    
-    # Filter empty bash/sh commands but KEEP bash commands with actual content
-    [ "$cmd" = "bash -lc" ] && return 0
-    [ "$cmd" = "sh -c" ] && return 0
-    [ "$cmd" = "bash -c" ] && return 0
-    [ "$cmd" = "bash" ] && return 0
-    [ "$cmd" = "sh" ] && return 0
-    
-    return 1
-}
-
-# Read audit entries with limit
-read_audit() {
-    local max_entries="${1:-1000}"
+    echo "Last $n clawdbot commands:"
+    echo "=========================="
     
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
     grep "^type=EXECVE" | \
-    tail -n "$max_entries"
+    tail -n "$((n * 2))" | \
+    while read line; do
+        format_line "$line"
+    done | tail -n "$n"
 }
 
-# Process entries with formatting and filtering
-process_entries() {
-    while read -r line; do
-        local formatted cmd_part
-        
-        formatted=$(format_command "$line")
-        [ -z "$formatted" ] && continue
-        
-        cmd_part="${formatted#*| }"
-        if should_filter "$cmd_part"; then
-            continue
-        fi
-        
-        echo "$formatted"
-    done
-}
-
-# Get recent N commands
-cmd_recent() {
-    local limit="${1:-200}"
-    
-    echo "Last $limit clawdbot commands:"
-    echo "=============================="
-    
-    read_audit "$((limit * 2))" | process_entries | tail -n "$limit"
-}
-
-# Get all commands (slow)
-cmd_all() {
+# Show all (slow)
+cmdlog_all() {
     echo "All of today's clawdbot commands:"
     echo "================================="
     
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
     grep "^type=EXECVE" | \
-    process_entries
-}
-
-# Default: get last 1000 commands (fast)
-cmd_default() {
-    local limit="${1:-1000}"
-    
-    echo "Recent clawdbot commands (last $limit):"
-    echo "========================================"
-    
-    read_audit "$((limit * 2))" | process_entries | tail -n "$limit"
-}
-
-# Search commands for pattern
-cmd_grep() {
-    local pattern="$1"
-    local count=0
-    local max_results=500
-    
-    if [ -z "$pattern" ]; then
-        echo "Error: No search pattern provided" >&2
-        echo "Usage: cmdlog --grep <pattern>" >&2
-        return 1
-    fi
-    
-    echo "Searching for: $pattern (max $max_results results)"
-    echo "=================================================="
-    
-    # Search last 5000 entries
-    read_audit 5000 | \
-    while read -r line && [ $count -lt $max_results ]; do
-        local formatted cmd_part
-        
-        formatted=$(format_command "$line")
-        [ -z "$formatted" ] && continue
-        
-        cmd_part="${formatted#*| }"
-        if should_filter "$cmd_part"; then
-            continue
-        fi
-        
-        # Case insensitive match
-        if [[ "${cmd_part,,}" == *"${pattern,,}"* ]]; then
-            echo "$formatted"
-            ((count++))
-        fi
+    while read line; do
+        format_line "$line"
     done
 }
 
-# Real-time live monitor
-cmd_live() {
-    local tmpfile new_entries line formatted cmd_part
+# Show recent N (alias for main)
+cmdlog_recent() {
+    local n="${1:-200}"
+    cmdlog_main "$n"
+}
+
+# Search
+cmdlog_grep() {
+    local pattern="${1:-}"
+    [ -z "$pattern" ] && { echo "Usage: cmdlog --grep <pattern>"; exit 1; }
     
-    echo "Watching for new commands... (Ctrl+C to stop)"
-    echo "=============================================="
+    echo "Searching last 2000 commands for: $pattern"
+    echo "==========================================="
     
-    tmpfile=$(mktemp)
-    trap "rm -f $tmpfile ${tmpfile}.new" EXIT
+    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+    grep "^type=EXECVE" | \
+    tail -n 2000 | \
+    while read line; do
+        local formatted=$(format_line "$line")
+        [ -z "$formatted" ] && continue
+        [[ "${formatted,,}" == *"${pattern,,}"* ]] && echo "$formatted"
+    done | head -100
+}
+
+# Live mode
+cmdlog_live() {
+    local tmpfile=$(mktemp)
+    trap "rm -f $tmpfile" EXIT
+    
+    echo "Watching... (Ctrl+C to stop)"
+    echo "============================"
     
     sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-    grep "^type=EXECVE" > "$tmpfile" 2>/dev/null
+    grep "^type=EXECVE" > "$tmpfile"
     
     while true; do
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-        grep "^type=EXECVE" > "${tmpfile}.new" 2>/dev/null
+        grep "^type=EXECVE" | \
+        comm -13 <(sort "$tmpfile") - 2>/dev/null | \
+        while read line; do
+            format_line "$line"
+        done
         
-        new_entries=$(comm -13 <(sort "$tmpfile") <(sort "${tmpfile}.new") 2>/dev/null)
-        
-        if [ -n "$new_entries" ]; then
-            echo "$new_entries" | while read -r line; do
-                formatted=$(format_command "$line")
-                [ -z "$formatted" ] && continue
-                
-                cmd_part="${formatted#*| }"
-                if should_filter "$cmd_part"; then
-                    continue
-                fi
-                
-                echo "$formatted"
-            done
-        fi
-        
-        mv "${tmpfile}.new" "$tmpfile" 2>/dev/null
+        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+        grep "^type=EXECVE" > "$tmpfile"
         sleep 2
     done
 }
 
-# Raw audit output
-cmd_raw() {
-    local limit="${1:-}"
+# Raw mode
+cmdlog_raw() {
+    local n="${1:-}"
     
-    if [ -n "$limit" ]; then
-        echo "Raw audit log entries (last $limit):"
-        echo "===================================="
-        read_audit "$limit"
+    if [ -n "$n" ]; then
+        echo "Raw entries (last $n):"
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+        grep "^type=EXECVE" | tail -n "$n"
     else
-        echo "Raw audit log entries (all of today):"
-        echo "======================================"
+        echo "Raw entries (all):"
         sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
         grep "^type=EXECVE"
     fi
@@ -277,44 +194,14 @@ cmd_raw() {
 # MAIN
 # ============================================================================
 
-case "$1" in
-    --help|-h)
-        show_help
-        exit 0
-        ;;
-    --all)
-        cmd_all
-        ;;
-    --recent)
-        cmd_recent "$2"
-        ;;
-    --today)
-        if [ -n "$2" ]; then
-            cmd_recent "$2"
-        else
-            cmd_default 1000
-        fi
-        ;;
-    --grep)
-        cmd_grep "$2"
-        ;;
-    --live)
-        cmd_live
-        ;;
-    --raw)
-        cmd_raw "$2"
-        ;;
-    "")
-        # Default: show last 1000 (fast)
-        cmd_default 1000
-        ;;
-    [0-9]*)
-        # Number argument: show that many recent commands
-        cmd_default "$1"
-        ;;
-    *)
-        echo "Unknown option: $1" >&2
-        echo "Use 'cmdlog --help' for usage information" >&2
-        exit 1
-        ;;
+case "${1:-}" in
+    --help|-h) show_help ;;
+    --all) cmdlog_all ;;
+    --recent) cmdlog_recent "$2" ;;
+    --grep) cmdlog_grep "$2" ;;
+    --live) cmdlog_live ;;
+    --raw) cmdlog_raw "$2" ;;
+    "") cmdlog_main 1000 ;;  # Default: 1000 entries
+    [0-9]*) cmdlog_main "$1" ;;  # Number: use as limit
+    *) echo "Unknown: $1"; exit 1 ;;
 esac
