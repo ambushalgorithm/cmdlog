@@ -21,9 +21,6 @@ ALIASES: cmdlog-recent, cmdlog-today, cmdlog-search, cmdlog-live
 EOF
 }
 
-# Common filter pattern - utilities to exclude
-FILTER_RE='^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock)$'
-
 # Process input with awk for speed
 # Args: $1 = limit (0 = unlimited), stdin = raw audit lines
 process_awk() {
@@ -39,7 +36,33 @@ process_awk() {
         return result
     }
     
-    BEGIN { count=0 }
+    BEGIN { count=0; last_ts=""; proctitle_cmd="" }
+    
+    # Capture PROCTITLE for bash commands with -c (shows the actual command run)
+    /type=PROCTITLE/ {
+        if (match($0, /msg=audit\(([0-9]+)/, m)) {
+            last_ts = strftime("%m/%d %H:%M", m[1])
+        }
+        # Extract proctitle hex and decode
+        if (match($0, /proctitle=([0-9a-fA-F]+)/, m)) {
+            hex = m[1]
+            proc = ""
+            for (i=1; i<=length(hex); i+=2) {
+                byte = substr(hex, i, 2)
+                char = sprintf("%c", strtonum("0x" byte))
+                proc = proc char
+            }
+            # If it is bash -c, extract the command
+            if (proc ~ /^bash -c / || proc ~ /^sh -c /) {
+                sub(/^bash -c /, "", proc)
+                sub(/^sh -c /, "", proc)
+                gsub(/[[:cntrl:]]/, "", proc)
+                if (proc != "" && proc !~ /^#/) {
+                    proctitle_cmd = proc
+                }
+            }
+        }
+    }
     
     /type=EXECVE/ {
         # Timestamp
@@ -53,31 +76,32 @@ process_awk() {
             pattern = "a" i "=\"([^\"]+)\""
             if (match($0, pattern, m)) {
                 arg = m[1]
-                # Hex decode if needed
                 if (arg ~ /^[0-9a-f]+$/ && length(arg) > 4) {
                     arg = hex_decode(arg)
                     if (arg !~ /[[:print:][:space:]]/) arg = ""
                 }
-                # Strip path from a0 only
-                if (i == 0) {
-                    gsub(/.*\//, "", arg)
-                }
-                if (arg != "") {
-                    cmd = (cmd == "" ? arg : cmd " " arg)
-                }
+                if (i == 0) gsub(/.*\//, "", arg)
+                if (arg != "") cmd = (cmd == "" ? arg : cmd " " arg)
             }
         }
         
-        # Filter
+        # Check if we have a proctitle for bash/sh commands
+        if ((cmd ~ /^bash / || cmd ~ /^sh /) && proctitle_cmd != "") {
+            print last_ts " | [builtin] " proctitle_cmd
+            proctitle_cmd = ""
+            if (limit > 0 && ++count >= limit) exit
+            next
+        }
+        
+        # Filter utilities
         first = cmd
         sub(/ .*/, "", first)
-        if (first ~ /^('$(echo $FILTER_RE | sed 's/|/|/g')')$/) next
+        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock)$/) next
         if (cmd ~ /cmdlog/) next
         if (cmd == "bash" || cmd == "sh") next
         if (cmd ~ /^bash -[lc]$/) next
         if (cmd == "sh -c") next
         
-        # Output
         if (cmd != "") {
             print ts " | " cmd
             if (limit > 0 && ++count >= limit) exit
@@ -85,18 +109,18 @@ process_awk() {
     }'
 }
 
-# Read audit and process
+# Read audit and process - include both EXECVE and PROCTITLE for bash builtins
 cmd_main() {
     local n="${1:-1000}"
     echo "Recent commands (last $n):"
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | tail -n "$((n*2))" | process_awk "$n" | tail -n "$n"
+    grep -E "^type=(EXECVE|PROCTITLE)" | tail -n "$((n*4))" | process_awk "$n" | tail -n "$n"
 }
 
 cmd_all() {
     echo "All of today's commands:"
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | process_awk 0
+    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0
 }
 
 cmd_recent() { cmd_main "${1:-200}"; }
@@ -109,23 +133,37 @@ cmd_search() {
 }
 
 cmd_live() {
-    local tmp=$(mktemp); trap "rm -f $tmp" EXIT
-    echo "Watching... (Ctrl+C to stop)"
-    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" > "$tmp"
+    local prev=$(mktemp); local curr=$(mktemp)
+    trap "rm -f $prev $curr" EXIT
+    
+    echo "Watching for new commands... (Ctrl+C to stop)"
+    echo "=============================================="
+    
+    # Get initial snapshot (last 50 entries)
+    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+    grep -E "^type=(EXECVE|PROCTITLE)" | tail -50 > "$prev"
+    
     while true; do
-        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" | \
-        comm -13 <(sort "$tmp") - | process_awk 0
-        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" > "$tmp"
         sleep 2
+        
+        # Get current snapshot
+        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+        grep -E "^type=(EXECVE|PROCTITLE)" | tail -50 > "$curr"
+        
+        # Show only lines in curr that are NOT in prev (new commands)
+        comm -23 <(sort "$curr") <(sort "$prev") | process_awk 0
+        
+        # Update prev for next iteration  
+        cp "$curr" "$prev"
     done
 }
 
 cmd_raw() {
     local n="${1:-}"
     if [ -n "$n" ]; then
-        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | grep "^type=EXECVE" | tail -n "$n"
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | grep -E "^type=(EXECVE|PROCTITLE)" | tail -n "$n"
     else
-        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | grep "^type=EXECVE"
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | grep -E "^type=(EXECVE|PROCTITLE)"
     fi
 }
 
@@ -134,15 +172,10 @@ case "${1:-}" in
     --all) cmd_all ;;
     --recent) cmd_recent "$2" ;;
     --today) 
-        # --today with no arg = default 1000, with arg = that many
-        if [ -n "$2" ]; then
-            cmd_main "$2"
-        else
-            cmd_main 1000
-        fi
+        if [ -n "$2" ]; then cmd_main "$2"; else cmd_main 1000; fi
         ;;
     --search) cmd_search "$2" ;;
-    --grep) cmd_search "$2" ;;  # Legacy alias
+    --grep) cmd_search "$2" ;;
     --live) cmd_live ;;
     --raw) cmd_raw "$2" ;;
     "") cmd_main 1000 ;;
