@@ -11,6 +11,8 @@ cmdlog - View clawdbot command audit logs
 USAGE:
     cmdlog [N]              Last N commands (default: 1000)
     cmdlog --all            All of today's commands (slow)
+    cmdlog --today [N]      Today's commands (default: 1000)
+    cmdlog --recent [N]     Last N commands (default: 200)
     cmdlog --grep PATTERN   Search for pattern
     cmdlog --live           Real-time watch
     cmdlog --raw [N]        Raw format
@@ -131,6 +133,14 @@ case "${1:-}" in
     --help|-h) show_help ;;
     --all) cmd_all ;;
     --recent) cmd_recent "$2" ;;
+    --today) 
+        # --today with no arg = default 1000, with arg = that many
+        if [ -n "$2" ]; then
+            cmd_main "$2"
+        else
+            cmd_main 1000
+        fi
+        ;;
     --grep) cmd_grep "$2" ;;
     --live) cmd_live ;;
     --raw) cmd_raw "$2" ;;
