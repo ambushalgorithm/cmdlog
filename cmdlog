@@ -128,7 +128,7 @@ process_awk() {
         
         # Filter rules
         first = cmd; sub(/ .*/, "", first)
-        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep|mktemp)$/) next
+        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|timedatectl|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep|mktemp)$/) next
         if (cmd ~ /\/tmp\/tmp\./) next
         if (cmd ~ /cmdlog/) next
         
