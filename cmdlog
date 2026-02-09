@@ -1,99 +1,100 @@
 #!/bin/bash
-#
-# cmdlog - Audit log viewer for clawdbot commands
-#
+# cmdlog - View clawdbot commands from audit logs
 # Location: ~/Projects/cmdlog/cmdlog
 
 export TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
-# Show help
 show_help() {
     cat << 'EOF'
 cmdlog - View clawdbot command audit logs
 
 USAGE:
-    cmdlog [N]              Show last N commands (default: 1000)
-    cmdlog --all            Show all of today's commands (slow)
-    cmdlog --recent [N]     Last N commands (default: 200)
-    cmdlog --grep PATTERN   Search recent commands for pattern
+    cmdlog [N]              Last N commands (default: 1000)
+    cmdlog --all            All of today's commands (slow)
+    cmdlog --grep PATTERN   Search for pattern
     cmdlog --live           Real-time watch
-    cmdlog --raw [N]        Raw audit format
+    cmdlog --raw [N]        Raw format
 
-ALIASES:
-    cmdlog-recent = cmdlog --recent
-    cmdlog-today  = cmdlog --today
-    cmdlog-grep   = cmdlog --grep
-    cmdlog-live   = cmdlog --live
+ALIASES: cmdlog-recent, cmdlog-today, cmdlog-grep, cmdlog-live
 EOF
 }
 
-# Format a single line: timestamp | command
-format_one() {
-    local line="$1"
-    local ts_epoch ts cmd a0 arg decoded
+# Common filter pattern - utilities to exclude
+FILTER_RE='^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock)$'
+
+# Process input with awk for speed
+# Args: $1 = limit (0 = unlimited), stdin = raw audit lines
+process_awk() {
+    local limit="${1:-0}"
     
-    ts_epoch=$(echo "$line" | grep -oP 'msg=audit\(\K[0-9]+(?=\.)')
-    [ -z "$ts_epoch" ] && return
-    ts=$(date -d "@$ts_epoch" "+%m/%d %H:%M" 2>/dev/null)
-    [ -z "$ts" ] && return
+    awk -v limit="$limit" '
+    function hex_decode(str) {
+        result = ""
+        for (i=1; i<=length(str); i+=2) {
+            byte = substr(str, i, 2)
+            result = result sprintf("%c", strtonum("0x" byte))
+        }
+        return result
+    }
     
-    a0=$(echo "$line" | grep -oP 'a0="\K[^"]+' | head -1)
-    [ -z "$a0" ] && return
+    BEGIN { count=0 }
     
-    # Clean path
-    a0=${a0##*/}
-    
-    # Build command
-    cmd="$a0"
-    for i in 1 2 3 4 5; do
-        arg=$(echo "$line" | grep -oP "a$i=\"\K[^\"]+" | head -1)
-        [ -z "$arg" ] && continue
-        # Decode hex
-        [[ "$arg" =~ ^[0-9a-f]+$ ]] && [ ${#arg} -gt 4 ] && \
-            arg=$(echo "$arg" | xxd -r -p 2>/dev/null | tr -d '\0')
-        cmd="$cmd $arg"
-    done
-    
-    # Trim and check
-    cmd=$(echo "$cmd" | sed 's/^ *//; s/ *$//')
-    [ ${#cmd} -lt 2 ] && return
-    
-    # Filter utilities
-    local first="${cmd%% *}"
-    case "$first" in
-        grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc) return ;;
-    esac
-    [[ "$cmd" == *cmdlog* ]] && return
-    [ "$cmd" = "bash" ] || [ "$cmd" = "sh" ] || [ "$cmd" = "bash -c" ] || [ "$cmd" = "bash -lc" ] || [ "$cmd" = "sh -c" ] && return
-    
-    echo "$ts | $cmd"
+    /type=EXECVE/ {
+        # Timestamp
+        if (match($0, /msg=audit\(([0-9]+)/, m)) {
+            ts = strftime("%m/%d %H:%M", m[1])
+        }
+        
+        # Command + args
+        cmd = ""
+        for (i=0; i<=5; i++) {
+            pattern = "a" i "=\"([^\"]+)\""
+            if (match($0, pattern, m)) {
+                arg = m[1]
+                # Hex decode if needed
+                if (arg ~ /^[0-9a-f]+$/ && length(arg) > 4) {
+                    arg = hex_decode(arg)
+                    if (arg !~ /[[:print:][:space:]]/) arg = ""
+                }
+                # Strip path from a0 only
+                if (i == 0) {
+                    gsub(/.*\//, "", arg)
+                }
+                if (arg != "") {
+                    cmd = (cmd == "" ? arg : cmd " " arg)
+                }
+            }
+        }
+        
+        # Filter
+        first = cmd
+        sub(/ .*/, "", first)
+        if (first ~ /^('$(echo $FILTER_RE | sed 's/|/|/g')')$/) next
+        if (cmd ~ /cmdlog/) next
+        if (cmd == "bash" || cmd == "sh") next
+        if (cmd ~ /^bash -[lc]$/) next
+        if (cmd == "sh -c") next
+        
+        # Output
+        if (cmd != "") {
+            print ts " | " cmd
+            if (limit > 0 && ++count >= limit) exit
+        }
+    }'
 }
 
-# Read and process N lines
-process_n() {
-    local n="${1:-1000}"
-    
-    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | \
-    tail -n "$((n * 2))" | \
-    while read line; do
-        format_one "$line"
-    done | tail -n "$n"
-}
-
-# Main commands
+# Read audit and process
 cmd_main() {
-    echo "Recent commands (last ${1:-1000}):"
-    echo "=================================="
-    process_n "${1:-1000}"
+    local n="${1:-1000}"
+    echo "Recent commands (last $n):"
+    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+    grep "^type=EXECVE" | tail -n "$((n*2))" | process_awk "$n" | tail -n "$n"
 }
 
 cmd_all() {
     echo "All of today's commands:"
-    echo "========================"
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | \
-    while read line; do format_one "$line"; done
+    grep "^type=EXECVE" | process_awk 0
 }
 
 cmd_recent() { cmd_main "${1:-200}"; }
@@ -101,26 +102,17 @@ cmd_recent() { cmd_main "${1:-200}"; }
 cmd_grep() {
     local pat="${1:-}"
     [ -z "$pat" ] && { echo "Usage: cmdlog --grep PATTERN"; exit 1; }
-    
-    echo "Searching for: $pat (last 1000 entries)"
-    echo "======================================="
-    
-    # Get formatted output, then grep
-    process_n 1000 | grep -i "$pat"
+    echo "Searching for: $pat"
+    cmd_main 1000 | grep -i "$pat"
 }
 
 cmd_live() {
-    local tmp=$(mktemp)
-    trap "rm -f $tmp" EXIT
-    
+    local tmp=$(mktemp); trap "rm -f $tmp" EXIT
     echo "Watching... (Ctrl+C to stop)"
     sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" > "$tmp"
-    
     while true; do
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" | \
-        comm -13 <(sort "$tmp") - | while read line; do
-            format_one "$line"
-        done
+        comm -13 <(sort "$tmp") - | process_awk 0
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | grep "^type=EXECVE" > "$tmp"
         sleep 2
     done
@@ -135,10 +127,6 @@ cmd_raw() {
     fi
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
-
 case "${1:-}" in
     --help|-h) show_help ;;
     --all) cmd_all ;;
@@ -148,5 +136,5 @@ case "${1:-}" in
     --raw) cmd_raw "$2" ;;
     "") cmd_main 1000 ;;
     [0-9]*) cmd_main "$1" ;;
-    *) echo "Unknown: $1"; exit 1 ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
 esac
