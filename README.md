@@ -5,41 +5,43 @@ View all commands executed by the clawdbot user via Linux auditd logs.
 ## Quick Start
 
 ```bash
-# Show all of today's commands (may be slow on busy days)
+# Last 1000 commands (fast - under 1 second)
 cmdlog
 
-# Last 200 commands (fast)
-cmdlog-recent
+# Last 50 only
+cmdlog 50
 
-# Last 50 commands
-cmdlog --recent 50
+# All of today's commands (slow with many entries)
+cmdlog --all
 
-# Search for specific commands (searches last 10 min, max 500 results)
-cmdlog --grep "git commit"
+# Search for commands
+cmdlog --grep git
 
 # Raw audit format
 cmdlog --raw 100
 
-# Watch live as commands are executed
+# Watch live
 cmdlog --live
 ```
 
 ## Commands
 
-| Command | Description | Notes |
+| Command | Description | Speed |
 |---------|-------------|-------|
-| `cmdlog` | All of today's commands | No limit; may be slow with many entries |
-| `cmdlog --recent N` | Last N commands (default 200) | Fast - uses tail approach |
-| `cmdlog --today N` | Today's commands, limited to N | Same as --recent |
-| `cmdlog --grep pattern` | Search recent commands | Searches last 10 min, up to 500 matches |
-| `cmdlog --live` | Real-time watch | Shows new commands as they happen |
-| `cmdlog --raw N` | Raw audit entries | Skip formatting, show raw logs |
-| `cmdlog --help` | Show help | |
+| `cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
+| `cmdlog --all` | All of today's commands | 🐢 Slow |
+| `cmdlog --grep pattern` | Search recent commands | ⚡ Fast |
+| `cmdlog --live` | Real-time watch | ⚡ Fast |
+| `cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
 
 ## Aliases
 
-For convenience, these aliases are available (defined in `aliases.sh`):
+Add to `~/.bashrc`:
+```bash
+source ~/Projects/cmdlog/aliases.sh
+```
 
+Then use:
 ```bash
 cmdlog-recent   # = cmdlog --recent 200
 cmdlog-today    # = cmdlog --today
@@ -50,51 +52,36 @@ cmdlog-raw      # = cmdlog --raw
 
 ## Installation
 
-1. **Add to PATH** (in `~/.bashrc`):
-   ```bash
-   export PATH="$HOME/Projects/cmdlog:$PATH"
-   source ~/Projects/cmdlog/aliases.sh
-   ```
-
-2. **Reload shell**:
-   ```bash
-   source ~/.bashrc
-   ```
+Already set up at `~/Projects/cmdlog/`. Just ensure PATH includes it:
+```bash
+export PATH="$HOME/Projects/cmdlog:$PATH"
+```
 
 ## Requirements
 
-- `auditd` installed and running
-- Audit rule active for clawdbot user (UID 1001):
-  ```
-  -a always,exit -F arch=b64 -S execve -F uid=1001 -k clawdbot_exec
-  ```
+- `auditd` running with rule for clawdbot (UID 1001)
 - `sudo` access to read audit logs
+
+## What's Shown
+
+Commands are filtered to show:
+- ✅ Real commands (git, python, your tools)
+- ✅ bash/sh commands with actual content
+- ❌ Utilities (grep, tail, awk, date, etc.)
+- ❌ Empty shells (bare `bash -c` with no command)
+- ❌ cmdlog's own pipeline
+
+## Performance
+
+The script uses **awk for all processing** (no per-line bash commands):
+- 1000 entries: ~0.4 seconds
+- 10,000 entries: ~2 seconds  
+- All 195k entries: ~30 seconds (use `--all` sparingly)
 
 ## Timezone
 
-Timestamps display in local timezone (default: America/Bogota, UTC-5).
+Timestamps in local time (Bogota/UTC-5).
 
-## Performance Notes
+## Repo Location
 
-- `--recent` and `--today` with limits are **fast** (sub-second)
-- `cmdlog` without limits may take 10-30 seconds on busy days
-- `--grep` searches only the last 10 minutes for speed
-- `--live` has minimal overhead (< 1% CPU)
-
-## Internal Commands Filtered
-
-The following are automatically hidden:
-- Pipeline tools: `grep`, `tail`, `awk`, `sed`, etc.
-- System: `sudo`, `bash`, `sh`, `ip`, `node`
-- Helpers: `python3`, `jq`, `flock`, `env`
-- Self-references: any command containing `cmdlog`
-
-## Location
-
-- Repo: `~/Projects/cmdlog/`
-- Main script: `~/Projects/cmdlog/cmdlog`
-- Aliases: `~/Projects/cmdlog/aliases.sh`
-
-## License
-
-MIT
+`~/Projects/cmdlog/` - Track your own changes with git.
