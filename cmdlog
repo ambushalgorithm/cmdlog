@@ -2,7 +2,8 @@
 # cmdlog - View clawdbot commands from audit logs
 # Location: ~/Projects/cmdlog/cmdlog
 
-export TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")
+# Use system timezone (timedatectl is more reliable than /etc/timezone)
+export TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
 show_help() {
     cat << 'EOF'
