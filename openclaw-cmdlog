@@ -1,23 +1,22 @@
 #!/bin/bash
-# cmdlog - View clawdbot commands from audit logs
-# Location: ~/Projects/cmdlog/cmdlog
+# openclaw-cmdlog - View OpenClaw agent commands from audit logs
 
 export TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
 show_help() {
     cat << 'EOF'
-cmdlog - View clawdbot command audit logs
+openclaw-cmdlog - View OpenClaw agent command audit logs
 
 USAGE:
-    cmdlog [N]              Last N commands (default: 1000)
-    cmdlog --all            All of today's commands (slow)
-    cmdlog --today [N]      Today's commands (default: 1000)
-    cmdlog --recent [N]     Last N commands (default: 200)
-    cmdlog --search PATTERN Search for pattern
-    cmdlog --live           Real-time watch
-    cmdlog --raw [N]        Raw format
+    openclaw-cmdlog [N]              Last N commands (default: 1000)
+    openclaw-cmdlog --all            All of today's commands (slow)
+    openclaw-cmdlog --today [N]      Today's commands (default: 1000)
+    openclaw-cmdlog --recent [N]     Last N commands (default: 200)
+    openclaw-cmdlog --search PATTERN Search for pattern
+    openclaw-cmdlog --live           Real-time watch
+    openclaw-cmdlog --raw [N]        Raw format
 
-ALIASES: cmdlog-recent, cmdlog-today, cmdlog-search, cmdlog-live
+ALIASES: cmdlog-recent, cmdlog-today, cmdlog-search, cmdlog-live, cmdlog-raw
 EOF
 }
 
@@ -105,7 +104,7 @@ process_awk() {
         if (cmd ~ /^ip link show$/) next
         if (cmd ~ /^git maintenance run --auto --no-quiet$/) next
         if (cmd ~ /^dirname /) next
-        if (cmd ~ /cmdlog/) next
+        if (cmd ~ /openclaw-cmdlog/) next
         
         if (cmd != "") {
             print ts " | " cmd
@@ -132,7 +131,7 @@ cmd_recent() { cmd_main "${1:-200}"; }
 
 cmd_search() {
     local pat="${1:-}"
-    [ -z "$pat" ] && { echo "Usage: cmdlog --search PATTERN"; exit 1; }
+    [ -z "$pat" ] && { echo "Usage: openclaw-cmdlog --search PATTERN"; exit 1; }
     echo "Searching for: $pat"
     cmd_main 1000 | grep -i "$pat"
 }

@@ -1,94 +1,127 @@
-# cmdlog - Clawdbot Command Audit Viewer
+# openclaw-cmdlog
 
-View all commands executed by the clawdbot user via Linux auditd logs.
+View your OpenClaw agent's shell commands from Linux audit logs. Tracks everything the AI runs so you can review, search, and audit its activity.
 
 ## Quick Start
 
 ```bash
-# Last 1000 commands (fast - under 1 second)
-cmdlog
+# Add to PATH
+export PATH="$HOME/.local/bin:$PATH"
 
-# Last 50 only
-cmdlog 50
+# Last 1000 commands (fast)
+openclaw-cmdlog
 
-# All of today's commands (slow with many entries)
-cmdlog --all
+# Search for specific commands
+openclaw-cmdlog --search git
 
-# Search for commands
-cmdlog --search git
-
-# Raw audit format
-cmdlog --raw 100
-
-# Watch live
-cmdlog --live
+# Watch live as commands execute
+openclaw-cmdlog --live
 ```
+
+## Prerequisites
+
+**auditd** must be running with a rule tracking your OpenClaw user.
+
+First, find your OpenClaw username:
+
+```bash
+# Get the user running OpenClaw (usually clawdbot or similar)
+ps aux | grep openclaw | grep -v grep
+# Or check: whoami (if running locally)
+```
+
+Then add the audit rule (replace `clawdbot` with your username):
+
+```bash
+# One-time setup (requires sudo)
+sudo auditctl -a always,exit -F arch=b64 -S execve -F uid=$(id -u clawdbot) -k clawdbot_exec
+```
+
+To persist across reboots, add to `/etc/audit/rules.d/openclaw.rules`.
 
 ## Commands
 
 | Command | Description | Speed |
 |---------|-------------|-------|
-| `cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
-| `cmdlog --all` | All of today's commands | 🐢 Slow |
-| `cmdlog --search pattern` | Search recent commands | ⚡ Fast |
-| `cmdlog --live` | Real-time watch | ⚡ Fast |
-| `cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
+| `openclaw-cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
+| `openclaw-cmdlog --all` | All of today's commands | 🐢 Slow |
+| `openclaw-cmdlog --today [N]` | Today's commands (default 1000) | ⚡ Fast |
+| `openclaw-cmdlog --recent [N]` | Last N commands (default 200) | ⚡ Fast |
+| `openclaw-cmdlog --search <pattern>` | Search recent commands | ⚡ Fast |
+| `openclaw-cmdlog --live` | Real-time watch | ⚡ Fast |
+| `openclaw-cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
 
-## Aliases
+## Aliases (Optional)
 
-Add to `~/.bashrc`:
+Source the aliases file in your shell:
+
 ```bash
-source ~/Projects/cmdlog/aliases.sh
+# Add to ~/.bashrc or ~/.zshrc
+source /path/to/openclaw-cmdlog/aliases.sh
 ```
 
 Then use:
+
 ```bash
-cmdlog-recent   # = cmdlog --recent 200
-cmdlog-today    # = cmdlog --today
-cmdlog-search   # = cmdlog --search
-cmdlog-live     # = cmdlog --live
-cmdlog-raw      # = cmdlog --raw
+cmdlog-recent   # Last 200 commands
+cmdlog-today    # Today's commands
+cmdlog-search   # Search for pattern
+cmdlog-live     # Watch live
+cmdlog-raw      # Raw audit format
 ```
 
-**Note:** `cmdlog-grep` still works as a legacy alias for backward compatibility.
+Or manually add aliases to `~/.bashrc`:
+
+```bash
+alias cmdlog-recent='openclaw-cmdlog --recent'
+alias cmdlog-today='openclaw-cmdlog --today'
+alias cmdlog-search='openclaw-cmdlog --search'
+alias cmdlog-live='openclaw-cmdlog --live'
+alias cmdlog-raw='openclaw-cmdlog --raw'
+```
 
 ## Installation
 
-Already set up at `~/Projects/cmdlog/`. Just ensure PATH includes it:
 ```bash
-export PATH="$HOME/Projects/cmdlog:$PATH"
+git clone https://github.com/yourname/openclaw-cmdlog ~/.local/bin/openclaw-cmdlog
+# Or any directory in your PATH
+```
+
+Make sure the directory is in your PATH:
+
+```bash
+export PATH="$HOME/.local/bin/openclaw-cmdlog:$PATH"
+```
+
+## What's Filtered
+
+| ✅ Shown | ❌ Hidden |
+|----------|-----------|
+| Shell commands the AI runs | System utilities (grep, awk, date) |
+| Git, python, your tools | Empty bash shells |
+| Built-in commands | The cmdlog tool itself |
+
+## Performance
+
+Processing uses **awk** (no per-line bash loops):
+- 1000 entries: ~0.5 seconds
+- 10,000 entries: ~2 seconds
+
+## Configuration
+
+| Environment Variable | Purpose |
+|---------------------|---------|
+| `TZ` | Timezone for timestamps (defaults to system timezone) |
+
+Override example:
+
+```bash
+export TZ="America/New_York"
+openclaw-cmdlog
 ```
 
 ## Requirements
 
-- `auditd` running with rule for clawdbot (UID 1001)
+- Linux with `auditd` installed and running
 - `sudo` access to read audit logs
-
-## What's Shown
-
-Commands are filtered to show:
-- ✅ Real commands (git, python, your tools)
-- ✅ bash/sh commands with actual content
-- ❌ Utilities (grep, tail, awk, date, etc.)
-- ❌ Empty shells (bare `bash -c` with no command)
-- ❌ cmdlog's own pipeline
-
-## Performance
-
-The script uses **awk for all processing** (no per-line bash commands):
-- 1000 entries: ~0.4 seconds
-- 10,000 entries: ~2 seconds  
-- All 195k entries: ~30 seconds (use `--all` sparingly)
-
-## Timezone
-
-Timestamps in local time (Bogota/UTC-5).
-
-## Repo Location
-
-`~/Projects/cmdlog/` - Track your own changes with git.
-
-## Legacy
-
-- `--grep` still works as an alias for `--search`
-- `cmdlog-grep` alias still works
+- `auditctl` to configure rules
