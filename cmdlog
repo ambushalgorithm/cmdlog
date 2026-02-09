@@ -159,34 +159,28 @@ cmd_search() {
 }
 
 cmd_live() {
-    local prev=$(mktemp); local curr=$(mktemp); local last_count=0
-    trap "rm -f $prev $curr" EXIT
+    local tmpfile=$(mktemp)
+    trap "rm -f $tmpfile" EXIT
     
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
     
-    # Get initial snapshot (last 100 entries from today)
+    # Get initial state
     sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep -E "^type=(EXECVE|PROCTITLE)" | tail -100 > "$prev"
-    last_count=$(wc -l < "$prev")
+    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 > "$tmpfile"
     
     while true; do
         sleep 2
         
-        # Get current snapshot
+        # Get current state and append only new commands
         sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-        grep -E "^type=(EXECVE|PROCTITLE)" | tail -100 > "$curr"
-        
-        local new_count=$(wc -l < "$curr")
-        local diff=$((new_count - last_count))
-        
-        # If we have new entries, show them
-        if [ "$diff" -gt 0 ]; then
-            tail -n "$diff" "$curr" | process_awk 0
-        fi
-        
-        last_count=$new_count
-        cat "$curr" > "$prev"
+        grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 | \
+        while read line; do
+            if ! grep -qF "$line" "$tmpfile" 2>/dev/null; then
+                echo "$line"
+                echo "$line" >> "$tmpfile"
+            fi
+        done
     done
 }
 
