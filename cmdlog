@@ -130,6 +130,9 @@ process_awk() {
         first = cmd; sub(/ .*/, "", first)
         if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|timedatectl|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep|mktemp)$/) next
         if (cmd ~ /\/tmp\/tmp\./) next
+        if (cmd ~ /^sh -c ip neigh show$/) next
+        if (cmd ~ /^ip neigh show$/) next
+        if (cmd ~ /^ip link show$/) next
         if (cmd ~ /cmdlog/) next
         
         if (cmd != "") {
