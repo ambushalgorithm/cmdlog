@@ -96,7 +96,7 @@ process_awk() {
         # Filter utilities
         first = cmd
         sub(/ .*/, "", first)
-        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock)$/) next
+        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep)$/) next
         if (cmd ~ /cmdlog/) next
         if (cmd == "bash" || cmd == "sh") next
         if (cmd ~ /^bash -[lc]$/) next
