@@ -11,5 +11,3 @@ alias cmdlog-today='cmdlog --today'
 alias cmdlog-search='cmdlog --search'
 alias cmdlog-live='cmdlog --live'
 alias cmdlog-raw='cmdlog --raw'
-# Legacy alias for backward compatibility
-alias cmdlog-grep='cmdlog --search'

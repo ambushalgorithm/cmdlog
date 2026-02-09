@@ -181,7 +181,6 @@ case "${1:-}" in
         if [ -n "$2" ]; then cmd_main "$2"; else cmd_main 1000; fi
         ;;
     --search) cmd_search "$2" ;;
-    --grep) cmd_search "$2" ;;
     --live) cmd_live ;;
     --raw) cmd_raw "$2" ;;
     "") cmd_main 1000 ;;
