@@ -23,8 +23,8 @@ export TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
 # Filter patterns - commands to exclude from output
 # These are typically internal pipeline commands or system noise
-FILTER_WORDS="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq"
-FILTER_WORDS="${FILTER_WORDS}|sudo|bash|sh|ip|locale-check|dirname|node"
+FILTER_WORDS="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq|wc"
+FILTER_WORDS="${FILTER_WORDS}|sudo|bash|sh|ip|locale-check|dirname|node|python3|env|jq|flock"
 
 # ============================================================================
 # FUNCTIONS
