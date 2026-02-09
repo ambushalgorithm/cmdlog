@@ -155,28 +155,34 @@ cmd_search() {
 }
 
 cmd_live() {
-    local prev=$(mktemp); local curr=$(mktemp)
+    local prev=$(mktemp); local curr=$(mktemp); local last_count=0
     trap "rm -f $prev $curr" EXIT
     
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
     
-    # Get initial snapshot (last 50 entries)
-    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-    grep -E "^type=(EXECVE|PROCTITLE)" | tail -50 > "$prev"
+    # Get initial snapshot (last 100 entries from today)
+    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+    grep -E "^type=(EXECVE|PROCTITLE)" | tail -100 > "$prev"
+    last_count=$(wc -l < "$prev")
     
     while true; do
         sleep 2
         
         # Get current snapshot
-        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-        grep -E "^type=(EXECVE|PROCTITLE)" | tail -50 > "$curr"
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+        grep -E "^type=(EXECVE|PROCTITLE)" | tail -100 > "$curr"
         
-        # Show only new commands (in curr but not in prev)
-        comm -23 <(sort "$curr") <(sort "$prev") | process_awk 0
+        local new_count=$(wc -l < "$curr")
+        local diff=$((new_count - last_count))
         
-        # Swap: prev becomes curr for next iteration (avoids cp/touch)
-        mv "$curr" "$prev" 2>/dev/null
+        # If we have new entries, show them
+        if [ "$diff" -gt 0 ]; then
+            tail -n "$diff" "$curr" | process_awk 0
+        fi
+        
+        last_count=$new_count
+        cat "$curr" > "$prev"
     done
 }
 
