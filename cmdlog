@@ -108,9 +108,6 @@ process_awk() {
         if (cmd ~ /^mktemp/) next
         
         if (cmd ~ /cmdlog/) next
-        if (cmd == "bash" || cmd == "sh") next
-        if (cmd ~ /^bash -[lc]$/) next
-        if (cmd == "sh -c") next
         
         if (cmd != "") {
             print ts " | " cmd
