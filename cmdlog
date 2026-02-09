@@ -119,6 +119,8 @@ process_awk() {
         if (cmd ~ /^tail -/) next
         if (cmd ~ /^timedatectl show/) next
         if (cmd ~ /^mktemp/) next
+        if (cmd ~ /^sh -c ip neigh show/) next
+        if (cmd ~ /^ip neigh show/) next
         
         if (cmd ~ /cmdlog/) next
         
