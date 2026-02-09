@@ -103,6 +103,8 @@ process_awk() {
         if (cmd ~ /^sh -c ip neigh show$/) next
         if (cmd ~ /^ip neigh show$/) next
         if (cmd ~ /^ip link show$/) next
+        if (cmd ~ /^git maintenance run --auto --no-quiet$/) next
+        if (cmd ~ /^dirname /) next
         if (cmd ~ /cmdlog/) next
         
         if (cmd != "") {
