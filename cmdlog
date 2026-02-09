@@ -23,7 +23,7 @@ export TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")
 
 # Filter patterns - commands to exclude from output
 # These are typically internal pipeline commands or system noise
-FILTER_WORDS="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq|wc"
+FILTER_WORDS="grep|tail|head|awk|perl|sed|xxd|printf|date|cat|tee|seq|sort|comm|tr|uniq|wc|tac"
 FILTER_WORDS="${FILTER_WORDS}|sudo|bash|sh|ip|locale-check|dirname|node|python3|env|jq|flock"
 
 # ============================================================================
@@ -139,15 +139,30 @@ should_filter() {
     return 1  # Don't filter
 }
 
-# Get all of today's commands (no limit by default)
-get_all_commands() {
-    echo "All of today's clawdbot commands:"
-    echo "================================="
+# Read audit entries - handles both limited and unlimited
+# Args: $1 = max entries to read (empty = all)
+# Outputs: raw audit lines
+read_audit() {
+    local max_entries="${1:-}"
     
-    # Use ausearch with no limit - full day's log
-    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | \
+    if [ -n "$max_entries" ]; then
+        # Limited: use tail after grep for speed
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+        grep "^type=EXECVE" | \
+        tail -n "$max_entries"
+    else
+        # Unlimited: full scan (may be slow on busy days)
+        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+        grep "^type=EXECVE"
+    fi
+}
+
+# Process entries with formatting and filtering
+# Reads from stdin, outputs formatted lines
+process_entries() {
     while read -r line; do
+        local formatted cmd_part
+        
         formatted=$(format_command "$line")
         [ -z "$formatted" ] && continue
         
@@ -160,6 +175,14 @@ get_all_commands() {
     done
 }
 
+# Get all of today's commands (no limit by default)
+get_all_commands() {
+    echo "All of today's clawdbot commands:"
+    echo "================================="
+    
+    read_audit | process_entries
+}
+
 # Get recent N commands (tail approach for speed)
 # Args: $1 = number of entries to show (default 200)
 get_recent_commands() {
@@ -168,22 +191,8 @@ get_recent_commands() {
     echo "Last $limit clawdbot commands:"
     echo "=============================="
     
-    # Get last N*3 entries, filter, then limit to N
-    # The *3 multiplier accounts for filtered entries
-    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep "^type=EXECVE" | \
-    tail -n "$((limit * 3))" | \
-    while read -r line; do
-        formatted=$(format_command "$line")
-        [ -z "$formatted" ] && continue
-        
-        cmd_part="${formatted#*| }"
-        if should_filter "$cmd_part"; then
-            continue
-        fi
-        
-        echo "$formatted"
-    done | tail -n "$limit"
+    # Get more than needed since many will be filtered
+    read_audit "$((limit * 4))" | process_entries | tail -n "$limit"
 }
 
 # Search commands for pattern
@@ -199,15 +208,15 @@ search_commands() {
         return 1
     fi
     
-    echo "Searching for: $pattern (max $max_results results)"
-    echo "=================================================="
+    echo "Searching recent commands for: $pattern (max $max_results results)"
+    echo "==================================================================="
     
-    # Search backwards from end of log (more likely to find recent matches)
-    # Process last 10k entries to find matches quickly
-    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
+    # Use 'recent' (last 10 min) for fast search, not full day
+    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
     grep "^type=EXECVE" | \
-    tac | \
     while read -r line && [ $count -lt $max_results ]; do
+        local formatted cmd_part
+        
         formatted=$(format_command "$line")
         [ -z "$formatted" ] && continue
         
@@ -216,17 +225,17 @@ search_commands() {
             continue
         fi
         
-        # Only output if matches pattern (case insensitive)
-        if echo "$cmd_part" | grep -qi "$pattern"; then
+        # Check for match (case insensitive)
+        if [[ "${cmd_part,,}" == *"${pattern,,}"* ]]; then
             echo "$formatted"
             ((count++))
         fi
-    done | tac  # Reverse back to chronological order
+    done
 }
 
 # Real-time live monitor
 live_monitor() {
-    local last_file tmpfile new_entries line formatted cmd_part
+    local tmpfile new_entries line formatted cmd_part
     
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
@@ -234,20 +243,22 @@ live_monitor() {
     tmpfile=$(mktemp)
     trap "rm -f $tmpfile ${tmpfile}.new" EXIT
     
-    # Initialize with current state
+    # Initialize with current state (recent = last 10 min)
     sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-    grep "^type=EXECVE" | tail -100 > "$tmpfile" 2>/dev/null
+    grep "^type=EXECVE" > "$tmpfile" 2>/dev/null
     
     while true; do
         # Get current state
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-        grep "^type=EXECVE" | tail -100 > "${tmpfile}.new" 2>/dev/null
+        grep "^type=EXECVE" > "${tmpfile}.new" 2>/dev/null
         
-        # Find new entries (in temp file but not in last file)
-        new_entries=$(comm -13 <(sort "$tmpfile" 2>/dev/null) <(sort "${tmpfile}.new" 2>/dev/null) 2>/dev/null)
+        # Find new entries
+        new_entries=$(comm -13 <(sort "$tmpfile") <(sort "${tmpfile}.new") 2>/dev/null)
         
         if [ -n "$new_entries" ]; then
             echo "$new_entries" | while read -r line; do
+                local formatted cmd_part
+                
                 formatted=$(format_command "$line")
                 [ -z "$formatted" ] && continue
                 
@@ -256,12 +267,10 @@ live_monitor() {
                     continue
                 fi
                 
-                # Short format for live view: just timestamp and first word
                 echo "$formatted"
             done
         fi
         
-        # Update last state
         mv "${tmpfile}.new" "$tmpfile" 2>/dev/null
         sleep 2
     done
@@ -275,15 +284,12 @@ get_raw_logs() {
     if [ -n "$limit" ]; then
         echo "Raw audit log entries (last $limit):"
         echo "===================================="
-        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-        grep "^type=EXECVE" | \
-        tail -n "$limit"
     else
         echo "Raw audit log entries (all of today):"
         echo "======================================"
-        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-        grep "^type=EXECVE"
     fi
+    
+    read_audit "$limit"
 }
 
 # ============================================================================
@@ -300,10 +306,8 @@ case "$1" in
         ;;
     --today)
         if [ -n "$2" ]; then
-            # Limited version
             get_recent_commands "$2"
         else
-            # All of today
             get_all_commands
         fi
         ;;
