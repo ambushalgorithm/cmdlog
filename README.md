@@ -63,21 +63,21 @@ source /path/to/openclaw-cmdlog/aliases.sh
 Then use:
 
 ```bash
-cmdlog-recent   # Last 200 commands
-cmdlog-today    # Today's commands
-cmdlog-search   # Search for pattern
-cmdlog-live     # Watch live
-cmdlog-raw      # Raw audit format
+openclaw-cmdlog-recent   # Last 200 commands
+openclaw-cmdlog-today    # Today's commands
+openclaw-cmdlog-search   # Search for pattern
+openclaw-cmdlog-live     # Watch live
+openclaw-cmdlog-raw      # Raw audit format
 ```
 
 Or manually add aliases to `~/.bashrc`:
 
 ```bash
-alias cmdlog-recent='openclaw-cmdlog --recent'
-alias cmdlog-today='openclaw-cmdlog --today'
-alias cmdlog-search='openclaw-cmdlog --search'
-alias cmdlog-live='openclaw-cmdlog --live'
-alias cmdlog-raw='openclaw-cmdlog --raw'
+alias openclaw-cmdlog-recent='openclaw-cmdlog --recent'
+alias openclaw-cmdlog-today='openclaw-cmdlog --today'
+alias openclaw-cmdlog-search='openclaw-cmdlog --search'
+alias openclaw-cmdlog-live='openclaw-cmdlog --live'
+alias openclaw-cmdlog-raw='openclaw-cmdlog --raw'
 ```
 
 ## Installation
@@ -99,7 +99,7 @@ export PATH="$HOME/.local/bin/openclaw-cmdlog:$PATH"
 |----------|-----------|
 | Shell commands the AI runs | System utilities (grep, awk, date) |
 | Git, python, your tools | Empty bash shells |
-| Built-in commands | The cmdlog tool itself |
+| Built-in commands | The openclaw-cmdlog tool itself |
 
 ## Performance
 

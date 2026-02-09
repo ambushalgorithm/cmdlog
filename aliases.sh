@@ -6,8 +6,8 @@
 case ":$PATH:" in *":$HOME/.local/bin/openclaw-cmdlog:") ;; *) export PATH="$HOME/.local/bin/openclaw-cmdlog:$PATH" ;; esac
 
 # Aliases
-alias cmdlog-recent='openclaw-cmdlog --recent'
-alias cmdlog-today='openclaw-cmdlog --today'
-alias cmdlog-search='openclaw-cmdlog --search'
-alias cmdlog-live='openclaw-cmdlog --live'
-alias cmdlog-raw='openclaw-cmdlog --raw'
+alias openclaw-cmdlog-recent='openclaw-cmdlog --recent'
+alias openclaw-cmdlog-today='openclaw-cmdlog --today'
+alias openclaw-cmdlog-search='openclaw-cmdlog --search'
+alias openclaw-cmdlog-live='openclaw-cmdlog --live'
+alias openclaw-cmdlog-raw='openclaw-cmdlog --raw'
