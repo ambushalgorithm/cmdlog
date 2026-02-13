@@ -194,16 +194,6 @@ process_awk() {
         
         # Built-in filter rules
         first = cmd; sub(/ .*/, "", first)
-        if (first ~ /^(grep|tail|head|awk|sed|cat|tee|sort|date|sudo|ip|locale|timedatectl|xxd|printf|seq|comm|tr|uniq|tac|wc|python3|jq|env|ssh|flock|sleep|mktemp)$/) next
-        if (cmd ~ /\/tmp\/tmp\./) next
-        if (cmd ~ /^sh -c ip neigh show$/) next
-        if (cmd ~ /^ip neigh show$/) next
-        if (cmd ~ /^ip link show$/) next
-        if (cmd ~ /^git maintenance run --auto --no-quiet$/) next
-        if (cmd ~ /^dirname /) next
-        if (cmd ~ /openclaw-cmdlog/) next
-        if (cmd ~ /sessions list --active-minutes/) next
-        if (cmd ~ /openclaw\.mjs sessions list/) next
         
         # User-defined filters
         if (matches_user_filter(cmd, user_filters)) next
@@ -243,31 +233,41 @@ cmd_search() {
 }
 
 cmd_live() {
-    local prev=$(mktemp); local curr=$(mktemp)
-    trap "rm -f $prev $curr" EXIT
+    local state_file="${HOME}/.openclaw/.config/cmdlog.seen"
     local user_filters
     user_filters=$(load_user_filters)
+    
+    # Create state file directory if needed
+    mkdir -p "$(dirname "$state_file")"
     
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
     
-    # Initialize prev with current state
-    sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$prev" 2>/dev/null
+    # Seed the seen file with existing commands to avoid replay
+    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+        grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" 2>/dev/null | \
+        tee "$state_file" > /dev/null 2>/dev/null || touch "$state_file"
+    
+    local seen_count=$(wc -l < "$state_file" 2>/dev/null || echo 0)
+    echo "Initial state: $seen_count existing commands filtered."
+    echo ""
     
     while true; do
         sleep 2
         
-        # Get new state
-        sudo ausearch -k clawdbot_exec -ts today -r 2>/dev/null | \
-        grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$curr" 2>/dev/null
-        
-        # Print lines in curr that aren't in prev - using comm
-        # Only lines unique to curr (new commands)
-        comm -13 <(sort "$prev" 2>/dev/null) <(sort "$curr" 2>/dev/null) 2>/dev/null
-        
-        # Update prev
-        mv "$curr" "$prev" 2>/dev/null || true
+        # Query only last 5 seconds (much smaller window)
+        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+            grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" 2>/dev/null | \
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                # Check if we've seen this line before
+                if ! grep -qxF "$line" "$state_file" 2>/dev/null; then
+                    echo "$line"
+                    echo "$line" >> "$state_file"
+                    # Trim state file to last 1000 lines to prevent unbounded growth
+                    tail -n 1000 "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file" 2>/dev/null || true
+                fi
+            done
     done
 }
 
