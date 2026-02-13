@@ -241,15 +241,22 @@ cmd_live() {
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
     
-    # Initialize prev with current state (recent = last 10 min)
-    sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+    # Calculate timestamp for 3 minutes ago
+    local start_time
+    start_time=$(date -d '3 minutes ago' '+%H:%M:%S')
+    
+    # Initialize prev with current state (3 minute window)
+    sudo ausearch -k clawdbot_exec -ts "$start_time" -r 2>/dev/null | \
     grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$prev" 2>/dev/null
     
     while true; do
         sleep 2
         
-        # Get new state (recent = last 10 min, not entire day)
-        sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
+        # Update timestamp (3 minute window)
+        start_time=$(date -d '3 minutes ago' '+%H:%M:%S')
+        
+        # Get new state
+        sudo ausearch -k clawdbot_exec -ts "$start_time" -r 2>/dev/null | \
             grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$curr" 2>/dev/null
         
         # Print lines in curr that aren't in prev - using comm
