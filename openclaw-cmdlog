@@ -233,41 +233,30 @@ cmd_search() {
 }
 
 cmd_live() {
-    local state_file="${HOME}/.openclaw/.config/cmdlog.seen"
+    local prev=$(mktemp); local curr=$(mktemp)
+    trap "rm -f $prev $curr" EXIT
     local user_filters
     user_filters=$(load_user_filters)
-    
-    # Create state file directory if needed
-    mkdir -p "$(dirname "$state_file")"
     
     echo "Watching for new commands... (Ctrl+C to stop)"
     echo "=============================================="
     
-    # Seed the seen file with existing commands to avoid replay
+    # Initialize prev with current state (recent = last 10 min)
     sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-        grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" 2>/dev/null | \
-        tee "$state_file" > /dev/null 2>/dev/null || touch "$state_file"
-    
-    local seen_count=$(wc -l < "$state_file" 2>/dev/null || echo 0)
-    echo "Initial state: $seen_count existing commands filtered."
-    echo ""
+    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$prev" 2>/dev/null
     
     while true; do
         sleep 2
         
-        # Query only last 5 seconds (much smaller window)
+        # Get new state (recent = last 10 min, not entire day)
         sudo ausearch -k clawdbot_exec -ts recent -r 2>/dev/null | \
-            grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" 2>/dev/null | \
-            while IFS= read -r line; do
-                [ -z "$line" ] && continue
-                # Check if we've seen this line before
-                if ! grep -qxF "$line" "$state_file" 2>/dev/null; then
-                    echo "$line"
-                    echo "$line" >> "$state_file"
-                    # Trim state file to last 1000 lines to prevent unbounded growth
-                    tail -n 1000 "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file" 2>/dev/null || true
-                fi
-            done
+            grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$curr" 2>/dev/null
+        
+        # Print lines in curr that aren't in prev - using comm
+        comm -13 <(sort "$prev" 2>/dev/null) <(sort "$curr" 2>/dev/null) 2>/dev/null
+        
+        # Update prev
+        mv "$curr" "$prev" 2>/dev/null || true
     done
 }
 
