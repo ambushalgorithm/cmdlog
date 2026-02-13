@@ -101,6 +101,41 @@ export PATH="$HOME/.local/bin/openclaw-cmdlog:$PATH"
 | Git, python, your tools | Empty bash shells |
 | Built-in commands | The openclaw-cmdlog tool itself |
 
+## Custom Filters
+
+Add your own filter patterns to hide specific commands:
+
+```bash
+# Create user config directory
+mkdir -p ~/.openclaw/.config
+
+# Create personal filters file
+nano ~/.openclaw/.config/cmdlog.filters.conf
+```
+
+Example `cmdlog.filters.conf`:
+```
+# Hide internal dev scripts
+my-internal-script
+build-and-deploy
+
+# Hide specific flags
+.*--verbose.*
+.*--debug.*
+
+# Hide specific npm commands
+^npm run (watch|start|dev)$
+```
+
+**Both configs are merged:**
+- `filters.conf` in repo directory (base defaults)
+- `~/.openclaw/.config/cmdlog.filters.conf` (your personal filters)
+
+View active filters:
+```bash
+openclaw-cmdlog --show-filters
+```
+
 ## Performance
 
 Processing uses **awk** (no per-line bash loops):

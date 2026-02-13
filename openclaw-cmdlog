@@ -7,13 +7,21 @@ export TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc
 # Get script directory for finding filters.conf
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load user filters from config file
+# Load filters from config files (repo + user)
+# Loads filters.conf from script directory first, then ~/.openclaw/.config/cmdlog.filters.conf
+# Both files are merged - patterns from both are applied
 load_user_filters() {
-    local config_file="${SCRIPT_DIR}/filters.conf"
-    if [ -f "$config_file" ]; then
-        grep -v '^#' "$config_file" 2>/dev/null | grep -v '^$' | while read -r line; do
-            echo "$line"
-        done
+    local repo_config="${SCRIPT_DIR}/filters.conf"
+    local user_config="${HOME}/.openclaw/.config/cmdlog.filters.conf"
+
+    # Load repo filters (base/defaults)
+    if [ -f "$repo_config" ]; then
+        grep -v '^#' "$repo_config" 2>/dev/null | grep -v '^$'
+    fi
+
+    # Load user filters (additional)
+    if [ -f "$user_config" ]; then
+        grep -v '^#' "$user_config" 2>/dev/null | grep -v '^$'
     fi
 }
 
@@ -35,7 +43,9 @@ ALIASES: openclaw-cmdlog-recent, openclaw-cmdlog-today, openclaw-cmdlog-search,
          openclaw-cmdlog-live, openclaw-cmdlog-raw
 
 CONFIG:
-    Edit filters.conf in the same directory to add custom filter patterns.
+    Two filter config files (both optional, patterns merged):
+    1. Repo: filters.conf in same directory as this script (base/defaults)
+    2. User: ~/.openclaw/.config/cmdlog.filters.conf (personal filters)
     One pattern per line (regex allowed). Lines starting with # are ignored.
 EOF
 }
@@ -57,14 +67,39 @@ show_filters() {
     echo "  sessions list --active-minutes  - OpenClaw heartbeat"
     echo "  openclaw.mjs sessions list      - OpenClaw monitoring"
     echo ""
-    local config_file="${SCRIPT_DIR}/filters.conf"
-    if [ -f "$config_file" ]; then
-        echo "=== User Filters (from filters.conf) ==="
-        grep -v '^#' "$config_file" 2>/dev/null | grep -v '^$' | nl || echo "  (none configured)"
+    local repo_config="${SCRIPT_DIR}/filters.conf"
+    local user_config="${HOME}/.openclaw/.config/cmdlog.filters.conf"
+
+    # Show repo filters
+    if [ -f "$repo_config" ]; then
+        echo "=== Repo Filters (${repo_config}) ==="
+        local repo_filters
+        repo_filters=$(grep -v '^#' "$repo_config" 2>/dev/null | grep -v '^$')
+        if [ -n "$repo_filters" ]; then
+            echo "$repo_filters" | nl
+        else
+            echo "  (none configured)"
+        fi
+    else
+        echo "=== Repo Filters ==="
+        echo "  (repo filters.conf not found)"
+    fi
+    echo ""
+
+    # Show user filters
+    if [ -f "$user_config" ]; then
+        echo "=== User Filters (${user_config}) ==="
+        local user_filters
+        user_filters=$(grep -v '^#' "$user_config" 2>/dev/null | grep -v '^$')
+        if [ -n "$user_filters" ]; then
+            echo "$user_filters" | nl
+        else
+            echo "  (none configured)"
+        fi
     else
         echo "=== User Filters ==="
-        echo "  (no filters.conf found at ${config_file})"
-        echo "  Create one to add custom filter patterns."
+        echo "  (no user config found)"
+        echo "  Create ~/.openclaw/.config/cmdlog.filters.conf to add personal filters."
     fi
 }
 
