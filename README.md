@@ -6,8 +6,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/ambushalgorithm/openclaw-cmdlog" alt="License">
-  <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/openclaw-cmdlog/tests.yml?label=Tests" alt="Tests">
+  <img src="https://img.shields.io/github/license/ambushalgorithm/cmdlog" alt="License">
+  <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/cmdlog/tests.yml?label=Tests" alt="Tests">
 </p>
 
 ---
@@ -89,13 +89,13 @@ To persist across reboots, add to `/etc/audit/rules.d/cmdlog.rules`:
 
 ```bash
 # Clone anywhere
-git clone https://github.com/ambushalgorithm/openclaw-cmdlog.git
+git clone https://github.com/ambushalgorithm/cmdlog.git
 
 # Add to PATH
-export PATH="$PATH:/path/to/openclaw-cmdlog"
+export PATH="$PATH:/path/to/cmdlog"
 
 # Or symlink to /usr/local/bin
-ln -s /path/to/openclaw-cmdlog/cmdlog /usr/local/bin/cmdlog
+ln -s /path/to/cmdlog/cmdlog /usr/local/bin/cmdlog
 ```
 
 First-run will prompt you to copy `config.sample` to `~/.config/cmdlog.conf`.
