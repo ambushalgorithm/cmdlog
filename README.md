@@ -6,8 +6,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/crayon-doing-petri/openclaw-cmdlog" alt="License">
-  <img src="https://img.shields.io/github/actions/workflow/status/crayon-doing-petri/openclaw-cmdlog/tests?label=Tests" alt="Tests">
+  <img src="https://img.shields.io/github/license/ambushalgorithm/openclaw-cmdlog" alt="License">
+  <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/openclaw-cmdlog/tests?label=Tests" alt="Tests">
 </p>
 
 ---
@@ -89,7 +89,7 @@ To persist across reboots, add to `/etc/audit/rules.d/cmdlog.rules`:
 
 ```bash
 # Clone anywhere
-git clone https://github.com/crayon-doing-petri/openclaw-cmdlog.git
+git clone https://github.com/ambushalgorithm/openclaw-cmdlog.git
 
 # Add to PATH
 export PATH="$PATH:/path/to/openclaw-cmdlog"
