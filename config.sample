@@ -1,0 +1,25 @@
+# cmdlog configuration file
+# Copy this to ~/.config/cmdlog.conf and customize
+
+# Audit key - must match the key used in auditd rules
+# This is the -w flag in your auditd rule (e.g., -w /path/to/watch -k my_key)
+AUDIT_KEY="clawdbot_exec"
+
+# User to monitor (defaults to current user)
+# CMDLOG_USER="clawdbot"
+
+# Config file for filter patterns (optional)
+# If not set, uses filters.conf in script directory + ~/.config/cmdlog.filters.conf
+# FILTERS_FILE=""
+
+# Default number of commands to show
+# DEFAULT_LIMIT=1000
+
+# Timezone for timestamp display
+# TZ="America/Bogota"
+
+# Output format: plain, json
+# FORMAT="plain"
+
+# Real-time polling interval (seconds)
+# POLL_INTERVAL=2

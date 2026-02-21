@@ -1,33 +1,33 @@
-# openclaw-cmdlog
+# cmdlog
 
-View your OpenClaw agent's shell commands from Linux audit logs. Tracks everything the AI runs so you can review, search, and audit its activity.
+View your AI agent's shell commands from Linux audit logs. Tracks everything the AI runs so you can review, search, and audit its activity.
+
+**Works with any AI agent** (OpenClaw, Claude Code, Codex, etc.)
 
 ## Quick Start
 
 ```bash
-# Add to PATH
-export PATH="$HOME/.local/bin:$PATH"
+# Copy config and customize
+cp config.sample ~/.config/cmdlog.conf
 
 # Last 1000 commands (fast)
-openclaw-cmdlog
+cmdlog
 
 # Search for specific commands
-openclaw-cmdlog --search git
+cmdlog --search git
 
 # Watch live as commands execute
-openclaw-cmdlog --live
+cmdlog --live
 ```
 
 ## Prerequisites
 
-**auditd** must be running with a rule tracking your OpenClaw user.
+**auditd** must be running with a rule tracking your agent's user.
 
-First, find your OpenClaw username:
+First, find the user running your agent:
 
 ```bash
-# Get the user running OpenClaw (usually clawdbot or similar)
-ps aux | grep openclaw | grep -v grep
-# Or check: whoami (if running locally)
+ps aux | grep -E "(openclaw|claude|codex)" | grep -v grep
 ```
 
 Then add the audit rule (replace `clawdbot` with your username):
@@ -37,122 +37,118 @@ Then add the audit rule (replace `clawdbot` with your username):
 sudo auditctl -a always,exit -F arch=b64 -S execve -F uid=$(id -u clawdbot) -k clawdbot_exec
 ```
 
-To persist across reboots, add to `/etc/audit/rules.d/openclaw.rules`.
+To persist across reboots, add to `/etc/audit/rules.d/cmdlog.rules`.
+
+## Installation
+
+```bash
+# Clone anywhere
+git clone https://github.com/crayon-doing-petri/openclaw-cmdlog.git
+
+# Add to PATH
+export PATH="$PATH:/path/to/openclaw-cmdlog"
+
+# Or create symlink
+ln -s /path/to/openclaw-cmdlog/cmdlog /usr/local/bin/cmdlog
+```
+
+First-run will prompt you to set up config.
 
 ## Commands
 
 | Command | Description | Speed |
 |---------|-------------|-------|
-| `openclaw-cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
-| `openclaw-cmdlog --all` | All of today's commands | 🐢 Slow |
-| `openclaw-cmdlog --today [N]` | Today's commands (default 1000) | ⚡ Fast |
-| `openclaw-cmdlog --recent [N]` | Last N commands (default 200) | ⚡ Fast |
-| `openclaw-cmdlog --search <pattern>` | Search recent commands | ⚡ Fast |
-| `openclaw-cmdlog --live` | Real-time watch | ⚡ Fast |
-| `openclaw-cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
-
-## Aliases (Optional)
-
-Source the aliases file in your shell:
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-source /path/to/openclaw-cmdlog/aliases.sh
-```
-
-Then use:
-
-```bash
-openclaw-cmdlog-recent   # Last 200 commands
-openclaw-cmdlog-today    # Today's commands
-openclaw-cmdlog-search   # Search for pattern
-openclaw-cmdlog-live     # Watch live
-openclaw-cmdlog-raw      # Raw audit format
-```
-
-Or manually add aliases to `~/.bashrc`:
-
-```bash
-alias openclaw-cmdlog-recent='openclaw-cmdlog --recent'
-alias openclaw-cmdlog-today='openclaw-cmdlog --today'
-alias openclaw-cmdlog-search='openclaw-cmdlog --search'
-alias openclaw-cmdlog-live='openclaw-cmdlog --live'
-alias openclaw-cmdlog-raw='openclaw-cmdlog --raw'
-```
-
-## Installation
-
-```bash
-# Clone to any directory in your PATH
-git clone https://github.com/crayon-doing-petri/openclaw-cmdlog.git
-```
-
-Make sure the directory is in your PATH:
-
-```bash
-export PATH="$HOME/.local/bin/openclaw-cmdlog:$PATH"
-```
-
-## What's Filtered
-
-| ✅ Shown | ❌ Hidden |
-|----------|-----------|
-| Shell commands the AI runs | System utilities (grep, awk, date) |
-| Git, python, your tools | Empty bash shells |
-| Built-in commands | The openclaw-cmdlog tool itself |
-
-## Custom Filters
-
-Add your own filter patterns to hide specific commands:
-
-```bash
-# Create user config directory
-mkdir -p ~/.openclaw/.config
-
-# Create personal filters file
-nano ~/.openclaw/.config/cmdlog.filters.conf
-```
-
-Example `cmdlog.filters.conf`:
-```
-# Hide internal dev scripts
-my-internal-script
-build-and-deploy
-
-# Hide specific flags
-.*--verbose.*
-.*--debug.*
-
-# Hide specific npm commands
-^npm run (watch|start|dev)$
-```
-
-**Both configs are merged:**
-- `filters.conf` in repo directory (base defaults)
-- `~/.openclaw/.config/cmdlog.filters.conf` (your personal filters)
-
-View active filters:
-```bash
-openclaw-cmdlog --show-filters
-```
-
-## Performance
-
-Processing uses **awk** (no per-line bash loops):
-- 1000 entries: ~0.5 seconds
-- 10,000 entries: ~2 seconds
+| `cmdlog [N]` | Last N commands (default 1000) | ⚡ Fast |
+| `cmdlog --all` | All of today's commands | 🐢 Slow |
+| `cmdlog --today [N]` | Today's commands (default 1000) | ⚡ Fast |
+| `cmdlog --recent [N]` | Last N commands (default 200) | ⚡ Fast |
+| `cmdlog --search <pattern>` | Search recent commands | ⚡ Fast |
+| `cmdlog --live` | Real-time watch | ⚡ Fast |
+| `cmdlog --raw [N]` | Raw audit entries | ⚡ Fast |
+| `cmdlog --show-filters` | View filter patterns | ⚡ Fast |
+| `cmdlog --config` | Show config locations | ⚡ Fast |
 
 ## Configuration
 
-| Environment Variable | Purpose |
-|---------------------|---------|
-| `TZ` | Timezone for timestamps (defaults to system timezone) |
+Config file: `~/.config/cmdlog.conf`  
+Filters: `~/.config/cmdlog.filters.conf`
 
-Override example:
+### Config Options
 
 ```bash
-export TZ="America/New_York"
-openclaw-cmdlog
+# ~/.config/cmdlog.conf
+AUDIT_KEY="clawdbot_exec"      # Must match your auditd -k flag
+DEFAULT_LIMIT=1000             # Default number of commands to show
+TZ="America/Bogota"            # Timezone for timestamps
+```
+
+### Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CMDLOG_AUDIT_KEY` | Override audit key | From config |
+| `CMDLOG_CONFIG_FILE` | Override config path | `~/.config/cmdlog.conf` |
+| `CMDLOG_FILTERS_FILE` | Override filters path | `~/.config/cmdlog.filters.conf` |
+| `CMDLOG_DEFAULT_LIMIT` | Default limit | 1000 |
+| `CMDLOG_TZ` | Timezone | System default |
+| `CMDLOG_POLL_INTERVAL` | Live poll seconds | 2 |
+
+### CLI Flags
+
+```
+-k, --key <key>      Override audit key
+-c, --config <file>  Override config file
+-f, --filters <file> Override filters file
+```
+
+**Priority:** CLI flags > env vars > config file > defaults
+
+## Custom Filters
+
+Add filter patterns to hide specific commands:
+
+```bash
+# Create filters file
+nano ~/.config/cmdlog.filters.conf
+```
+
+Example:
+```
+# Hide internal scripts
+my-internal-script
+
+# Hide cloud metadata probes
+wget.*169\.254\.169\.254
+curl.*metadata\.google\.internal
+
+# Hide shell noise
+^if\s+
+^then$
+^fi$
+^exit\s+[0-9]+
+
+# Hide nvm/node paths
+\.nvm/versions
+```
+
+**Both filter files are merged:**
+- `filters.conf` in script directory (defaults)
+- `~/.config/cmdlog.filters.conf` (your filters)
+
+View active filters:
+```bash
+cmdlog --show-filters
+```
+
+## Testing
+
+```bash
+# Unit tests
+bats tests/unit/
+
+# E2E tests (Docker)
+docker build -t cmdlog-e2e -f tests/e2e/Dockerfile .
+docker run --rm cmdlog-e2e
 ```
 
 ## Requirements
@@ -160,3 +156,7 @@ openclaw-cmdlog
 - Linux with `auditd` installed and running
 - `sudo` access to read audit logs
 - `auditctl` to configure rules
+
+## License
+
+MIT

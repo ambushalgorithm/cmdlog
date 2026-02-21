@@ -1,0 +1,377 @@
+#!/bin/bash
+# cmdlog - View agent command audit logs
+# Config: ~/.config/cmdlog.conf
+# Filters: ~/.config/cmdlog.filters.conf
+
+set -euo pipefail
+
+# Default config values
+DEFAULT_AUDIT_KEY="clawdbot_exec"
+DEFAULT_CONFIG_FILE="${HOME}/.config/cmdlog.conf"
+DEFAULT_FILTERS_FILE="${HOME}/.config/cmdlog.filters.conf"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Runtime config (set by env vars, config file, or CLI)
+AUDIT_KEY="${CMDLOG_AUDIT_KEY:-}"
+CONFIG_FILE="${CMDLOG_CONFIG_FILE:-}"
+FILTERS_FILE="${CMDLOG_FILTERS_FILE:-}"
+DEFAULT_LIMIT="${CMDLOG_DEFAULT_LIMIT:-1000}"
+TZ="${CMDLOG_TZ:-$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")}"
+POLL_INTERVAL="${CMDLOG_POLL_INTERVAL:-2}"
+
+# Parse config file
+parse_config() {
+    local config_file="${1:-}"
+    [ -z "$config_file" ] && return
+    
+    # Skip if file doesn't exist
+    [ -f "$config_file" ] || return
+    
+    # Read config (bash 4+ feature)
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^# ]] && continue
+        [[ -z "$key" ]] && continue
+        
+        # Remove quotes and whitespace
+        value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^["'"'"']//;s/["'"'"']$//')
+        
+        case "$key" in
+            AUDIT_KEY)     AUDIT_KEY="${value}" ;;
+            DEFAULT_LIMIT) DEFAULT_LIMIT="${value}" ;;
+            TZ)            TZ="${value}" ;;
+            FILTERS_FILE)  FILTERS_FILE="${value}" ;;
+        esac
+    done < "$config_file"
+}
+
+# Load configuration (priority: CLI > env > config file > defaults)
+load_config() {
+    # Use config file if specified
+    if [ -z "$CONFIG_FILE" ]; then
+        CONFIG_FILE="$DEFAULT_CONFIG_FILE"
+    fi
+    
+    # Parse config file if it exists
+    if [ -f "$CONFIG_FILE" ]; then
+        parse_config "$CONFIG_FILE"
+    fi
+    
+    # Env vars override config file
+    [ -n "${CMDLOG_AUDIT_KEY:-}" ] && AUDIT_KEY="$CMDLOG_AUDIT_KEY"
+    [ -n "${CMDLOG_DEFAULT_LIMIT:-}" ] && DEFAULT_LIMIT="$CMDLOG_DEFAULT_LIMIT"
+    [ -n "${CMDLOG_TZ:-}" ] && TZ="$CMDLOG_TZ"
+    [ -n "${CMDLOG_FILTERS_FILE:-}" ] && FILTERS_FILE="$CMDLOG_FILTERS_FILE"
+    
+    # Set default audit key if not configured
+    [ -z "$AUDIT_KEY" ] && AUDIT_KEY="$DEFAULT_AUDIT_KEY"
+}
+
+# Load filters from config files
+load_filters() {
+    local repo_filters="${SCRIPT_DIR}/filters.conf"
+    local user_filters="${FILTERS_FILE:-${DEFAULT_FILTERS_FILE}}"
+    local combined=""
+    
+    # Load repo filters (base/defaults)
+    if [ -f "$repo_filters" ]; then
+        combined=$(grep -v '^#' "$repo_filters" 2>/dev/null | grep -v '^$' || true)
+    fi
+    
+    # Load user filters (additional)
+    if [ -f "$user_filters" ]; then
+        local user_patterns
+        user_patterns=$(grep -v '^#' "$user_filters" 2>/dev/null | grep -v '^$' || true)
+        if [ -n "$user_patterns" ]; then
+            combined="${combined}"$'\n'"${user_patterns}"
+        fi
+    fi
+    
+    echo "$combined"
+}
+
+show_help() {
+    cat << 'EOF'
+cmdlog - View agent command audit logs
+
+USAGE:
+    cmdlog [N]               Last N commands (default: 1000)
+    cmdlog --all            All of today's commands (slow)
+    cmdlog --today [N]      Today's commands (default: 1000)
+    cmdlog --recent [N]     Last N commands (default: 200)
+    cmdlog --search PATTERN Search for pattern
+    cmdlog --live           Real-time watch
+    cmdlog --raw [N]        Raw format
+    cmdlog --show-filters   Display active filters
+    cmdlog --config         Show config locations
+    cmdlog -k, --key <key>  Override audit key
+    cmdlog -c, --config <f> Override config file
+    cmdlog -f, --filters <f> Override filters file
+    cmdlog --help           Show this help
+
+CONFIG (priority: CLI > env > config > defaults):
+    Config file: ~/.config/cmdlog.conf
+    Filters:    ~/.config/cmdlog.filters.conf
+
+ENVIRONMENT VARIABLES:
+    CMDLOG_AUDIT_KEY        Override audit key
+    CMDLOG_CONFIG_FILE     Override config file path
+    CMDLOG_FILTERS_FILE    Override filters file path
+    CMDLOG_DEFAULT_LIMIT    Default command limit
+    CMDLOG_TZ              Timezone for timestamps
+    CMDLOG_POLL_INTERVAL   Real-time poll interval (seconds)
+
+EXAMPLES:
+    cmdlog                          # Last 1000 commands
+    cmdlog --recent 50             # Last 50 commands
+    cmdlog --search "git push"     # Search for git push
+    cmdlog --live                  # Watch in real-time
+    CMDLOG_AUDIT_KEY=my_key cmdlog # Use different audit key
+EOF
+}
+
+show_config() {
+    echo "=== cmdlog Configuration ==="
+    echo "Config file: ${CONFIG_FILE:-(not set, using default: ${DEFAULT_CONFIG_FILE})}"
+    echo "Filters:     ${FILTERS_FILE:-(not set, using default: ${DEFAULT_FILTERS_FILE})}"
+    echo "Audit key:   ${AUDIT_KEY}"
+    echo "Default limit: ${DEFAULT_LIMIT}"
+    echo "Timezone:    ${TZ}"
+    echo ""
+    echo "Config file exists: $([ -f "$CONFIG_FILE" ] && echo 'yes' || echo 'no')"
+    echo "Filters exist:     $([ -f "${FILTERS_FILE:-${DEFAULT_FILTERS_FILE}}" ] && echo 'yes' || echo 'no')"
+}
+
+show_filters() {
+    local repo_filters="${SCRIPT_DIR}/filters.conf"
+    local user_filters="${FILTERS_FILE:-${DEFAULT_FILTERS_FILE}}"
+    
+    echo "=== Built-in Filters ==="
+    echo "Shell utilities (standalone): grep, tail, head, awk, sed, cat, tee, sort,"
+    echo "  date, sudo, ip, locale, timedatectl, xxd, printf, seq, comm, tr, uniq,"
+    echo "  tac, wc, python3, jq, env, ssh, flock, sleep, mktemp"
+    echo ""
+    
+    # Show repo filters
+    if [ -f "$repo_filters" ]; then
+        echo "=== Repo Filters (${repo_filters}) ==="
+        local repo_filter_lines
+        repo_filter_lines=$(grep -v '^#' "$repo_filters" 2>/dev/null | grep -v '^$' || true)
+        if [ -n "$repo_filter_lines" ]; then
+            echo "$repo_filter_lines" | nl
+        else
+            echo "  (none configured)"
+        fi
+    fi
+    echo ""
+    
+    # Show user filters
+    if [ -f "$user_filters" ]; then
+        echo "=== User Filters (${user_filters}) ==="
+        local user_filter_lines
+        user_filter_lines=$(grep -v '^#' "$user_filters" 2>/dev/null | grep -v '^$' || true)
+        if [ -n "$user_filter_lines" ]; then
+            echo "$user_filter_lines" | nl
+        else
+            echo "  (none configured)"
+        fi
+    else
+        echo "=== User Filters ==="
+        echo "  (no user filters file found)"
+        echo "  Create ${DEFAULT_FILTERS_FILE} to add custom filters."
+    fi
+}
+
+# Process input with awk for speed
+process_awk() {
+    local limit="${1:-0}"
+    local user_filters="${2:-}"
+    
+    export TZ
+    
+    awk -v limit="$limit" -v user_filters="$user_filters" '
+    function hex_decode(str) {
+        result = ""
+        for (i=1; i<=length(str); i+=2) {
+            byte = substr(str, i, 2)
+            result = result sprintf("%c", strtonum("0x" byte))
+        }
+        return result
+    }
+    
+    function matches_user_filter(cmd, filters,    n, i, pattern) {
+        n = split(filters, patterns, "\n")
+        for (i=1; i<=n; i++) {
+            pattern = patterns[i]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", pattern)
+            if (pattern == "") continue
+            if (cmd ~ pattern) return 1
+        }
+        return 0
+    }
+    
+    BEGIN { count=0; last_ts=""; proctitle_cmd="" }
+    
+    /type=PROCTITLE/ {
+        if (match($0, /msg=audit\(([0-9]+)/, m)) {
+            last_ts = strftime("%m/%d %H:%M", m[1])
+        }
+        if (match($0, /proctitle=([0-9a-fA-F]+)/, m)) {
+            hex = m[1]
+            proc = ""
+            for (i=1; i<=length(hex); i+=2) {
+                byte = substr(hex, i, 2)
+                char = sprintf("%c", strtonum("0x" byte))
+                proc = proc char
+            }
+            if (proc ~ /^bash -c / || proc ~ /^sh -c /) {
+                sub(/^bash -c /, "", proc)
+                sub(/^sh -c /, "", proc)
+                gsub(/[[:cntrl:]]/, "", proc)
+                if (proc != "" && proc !~ /^#/) {
+                    proctitle_cmd = proc
+                }
+            }
+        }
+    }
+    
+    /type=EXECVE/ {
+        if (match($0, /msg=audit\(([0-9]+)/, m)) {
+            ts = strftime("%m/%d %H:%M", m[1])
+        }
+        
+        cmd = ""
+        for (i=0; i<=5; i++) {
+            arg = ""
+            pattern_quoted = "a" i "=\"([^\"]+)\""
+            pattern_unquoted = "a" i "=([0-9a-fA-F]+)"
+            
+            if (match($0, pattern_quoted, m)) {
+                arg = m[1]
+            } else if (match($0, pattern_unquoted, m)) {
+                arg = m[1]
+            }
+            
+            if (arg != "") {
+                if (arg ~ /^[0-9a-fA-F]+$/ && length(arg) > 4) {
+                    arg = hex_decode(arg)
+                    if (arg !~ /^[[:print:][:space:]]+$/) arg = ""
+                }
+                if (i == 0) gsub(/.*\//, "", arg)
+                if (arg != "") cmd = (cmd == "" ? arg : cmd " " arg)
+            }
+        }
+        
+        if ((cmd ~ /^bash / || cmd ~ /^sh /) && proctitle_cmd != "") {
+            print last_ts " | [builtin] " proctitle_cmd
+            proctitle_cmd = ""
+            if (limit > 0 && ++count >= limit) exit
+        }
+        
+        if (matches_user_filter(cmd, user_filters)) next
+        
+        if (cmd != "") {
+            print ts " | " cmd
+            if (limit > 0 && ++count >= limit) exit
+        }
+    }'
+}
+
+cmd_main() {
+    local n="${1:-$DEFAULT_LIMIT}"
+    local user_filters
+    user_filters=$(load_filters)
+    echo "Recent commands (last $n):"
+    sudo ausearch -k "$AUDIT_KEY" -ts today -r 2>/dev/null | \
+    grep -E "^type=(EXECVE|PROCTITLE)" | tail -n "$((n*4))" | process_awk "$n" "$user_filters" | tail -n "$n"
+}
+
+cmd_all() {
+    local user_filters
+    user_filters=$(load_filters)
+    echo "All of today's commands:"
+    sudo ausearch -k "$AUDIT_KEY" -ts today -r 2>/dev/null | \
+    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters"
+}
+
+cmd_recent() { cmd_main "${1:-200}"; }
+
+cmd_search() {
+    local pat="${1:-}"
+    [ -z "$pat" ] && { echo "Usage: cmdlog --search PATTERN"; exit 1; }
+    echo "Searching for: $pat"
+    cmd_main 1000 | grep -i "$pat"
+}
+
+cmd_live() {
+    local prev=$(mktemp); local curr=$(mktemp)
+    trap "rm -f $prev $curr" EXIT
+    local user_filters
+    user_filters=$(load_filters)
+    
+    echo "Watching for new commands... (Ctrl+C to stop)"
+    echo "=============================================="
+    
+    local start_time
+    start_time=$(date -d "${POLL_INTERVAL} minutes ago" '+%H:%M:%S')
+    
+    sudo ausearch -k "$AUDIT_KEY" -ts "$start_time" -r 2>/dev/null | \
+    grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$prev" 2>/dev/null
+    
+    while true; do
+        sleep "$POLL_INTERVAL"
+        
+        start_time=$(date -d "${POLL_INTERVAL} minutes ago" '+%H:%M:%S')
+        
+        sudo ausearch -k "$AUDIT_KEY" -ts "$start_time" -r 2>/dev/null | \
+            grep -E "^type=(EXECVE|PROCTITLE)" | process_awk 0 "$user_filters" > "$curr" 2>/dev/null
+        
+        comm -13 <(sort "$prev" 2>/dev/null) <(sort "$curr" 2>/dev/null) 2>/dev/null
+        
+        mv "$curr" "$prev" 2>/dev/null || true
+    done
+}
+
+cmd_raw() {
+    local n="${1:-}"
+    if [ -n "$n" ]; then
+        sudo ausearch -k "$AUDIT_KEY" -ts today -r 2>/dev/null | grep -E "^type=(EXECVE|PROCTITLE)" | tail -n "$n"
+    else
+        sudo ausearch -k "$AUDIT_KEY" -ts today -r 2>/dev/null | grep -E "^type=(EXECVE|PROCTITLE)"
+    fi
+}
+
+# Main
+load_config
+
+# Check for first-run (no config file exists)
+if [ ! -f "$CONFIG_FILE" ] && [ ! -f "$DEFAULT_FILTERS_FILE" ]; then
+    echo "=== First-run Setup ==="
+    echo "Welcome to cmdlog! No config file found."
+    echo ""
+    echo "To get started:"
+    echo "  1. Copy config.sample to ~/.config/cmdlog.conf"
+    echo "  2. Customize your settings (optional)"
+    echo "  3. Create ~/.config/cmdlog.filters.conf for custom filters (optional)"
+    echo ""
+    echo "Run 'cmdlog --help' for usage information."
+    echo ""
+fi
+
+case "${1:-}" in
+    --help|-h)           show_help ;;
+    --config)            show_config ;;
+    --all)               cmd_all ;;
+    --recent)            cmd_recent "${2:-}" ;;
+    --today)             cmd_main "${2:-$DEFAULT_LIMIT}" ;;
+    --search)            cmd_search "${2:-}" ;;
+    --live)              cmd_live ;;
+    --raw)               cmd_raw "${2:-}" ;;
+    --show-filters)      show_filters ;;
+    -k|--key)            AUDIT_KEY="${2:-}" && cmd_main "${3:-$DEFAULT_LIMIT}" ;;
+    -c|--config)         CONFIG_FILE="${2:-}" && load_config && cmd_main "${3:-$DEFAULT_LIMIT}" ;;
+    -f|--filters)        FILTERS_FILE="${2:-}" && cmd_main "${3:-$DEFAULT_LIMIT}" ;;
+    "")                  cmd_main "$DEFAULT_LIMIT" ;;
+    [0-9]*)              cmd_main "$1" ;;
+    *)                   echo "Unknown option: $1" >&2; show_help >&2; exit 1 ;;
+esac
