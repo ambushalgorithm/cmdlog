@@ -7,7 +7,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/license/ambushalgorithm/openclaw-cmdlog" alt="License">
-  <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/openclaw-cmdlog/tests?label=Tests" alt="Tests">
+  <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/openclaw-cmdlog/test.yml?label=Tests" alt="Tests">
 </p>
 
 ---
