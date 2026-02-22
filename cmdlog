@@ -359,6 +359,9 @@ if [ ! -f "$CONFIG_FILE" ] && [ ! -f "$DEFAULT_FILTERS_FILE" ]; then
     echo ""
 fi
 
+# Load config before any command
+load_config
+
 case "${1:-}" in
     --help|-h)           show_help ;;
     --config)            show_config ;;
