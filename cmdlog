@@ -64,7 +64,7 @@ load_config() {
     [ -n "${CMDLOG_FILTERS_FILE:-}" ] && FILTERS_FILE="$CMDLOG_FILTERS_FILE"
     
     # Set default audit key if not configured
-    [ -z "$AUDIT_KEY" ] && AUDIT_KEY="$DEFAULT_AUDIT_KEY"
+    [ -z "$AUDIT_KEY" ] && AUDIT_KEY="$DEFAULT_AUDIT_KEY" || true
 }
 
 # Load filters from config files
@@ -110,8 +110,8 @@ USAGE:
     cmdlog --help           Show this help
 
 CONFIG (priority: CLI > env > config > defaults):
-    Config file: ~/.config/cmdlog.conf
-    Filters:    ~/.config/cmdlog.filters.conf
+    Config file: ~/.config/cmdlog/cmdlog.conf
+    Filters:    ~/.config/cmdlog/filters.conf
 
 ENVIRONMENT VARIABLES:
     CMDLOG_AUDIT_KEY        Override audit key
