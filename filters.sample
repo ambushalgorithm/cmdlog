@@ -1,0 +1,15 @@
+# cmdlog user filters
+# Copy to ~/.config/cmdlog/filters.conf
+# Patterns are regex (one per line, lines starting with # are ignored)
+
+# =============================================================================
+# Built-in filters are defined in filters.conf in the script directory
+# (/home/clawdbot/Projects/cmdlog/filters.conf)
+# =============================================================================
+
+# Add your custom filter patterns below:
+
+# Example filters:
+# ^git status$
+# ^ls -la$
+# ^rm -rf /

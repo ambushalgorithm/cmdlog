@@ -31,7 +31,11 @@
 # 1. Copy config and customize
 mkdir -p ~/.config/cmdlog
 cp config.sample ~/.config/cmdlog/cmdlog.conf
-cp filters.conf ~/.config/cmdlog/filters.conf
+cp filters.sample ~/.config/cmdlog/filters.conf
+
+# 2. Edit ~/.config/cmdlog/cmdlog.conf and set your AUDIT_KEY
+
+# 3. Add custom filter patterns to ~/.config/cmdlog/filters.conf (optional)
 
 # 2. View recent commands
 cmdlog
@@ -107,7 +111,15 @@ First-run will prompt you to copy `config.sample` to `~/.config/cmdlog/cmdlog.co
 ## ⚙️ Configuration
 
 **Config file:** `~/.config/cmdlog/cmdlog.conf`  
-**Filters:** `~/.config/cmdlog/filters.conf`
+**User filters:** `~/.config/cmdlog/filters.conf`  
+
+### Filter Files
+
+cmdlog uses two filter files:
+- **Built-in filters** (`filters.conf` in script directory) - comes with cmdlog
+- **User filters** (`~/.config/cmdlog/filters.conf`) - your custom patterns
+
+Patterns are regex, one per line. Lines starting with `#` are ignored.
 
 ### Config Options
 
