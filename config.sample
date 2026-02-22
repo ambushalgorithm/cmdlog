@@ -1,5 +1,5 @@
 # cmdlog configuration file
-# Copy this to ~/.config/cmdlog.conf and customize
+# Copy this to ~/.config/cmdlog/cmdlog.conf and customize
 
 # Audit key - must match the key used in auditd rules
 # This is the -w flag in your auditd rule (e.g., -w /path/to/watch -k my_key)
@@ -9,7 +9,7 @@ AUDIT_KEY="clawdbot_exec"
 # CMDLOG_USER="clawdbot"
 
 # Config file for filter patterns (optional)
-# If not set, uses filters.conf in script directory + ~/.config/cmdlog.filters.conf
+# If not set, uses filters.conf in script directory + ~/.config/cmdlog/filters.conf
 # FILTERS_FILE=""
 
 # Default number of commands to show

@@ -1,14 +1,14 @@
 #!/bin/bash
 # cmdlog - View agent command audit logs
-# Config: ~/.config/cmdlog.conf
-# Filters: ~/.config/cmdlog.filters.conf
+# Config: ~/.config/cmdlog/cmdlog.conf
+# Filters: ~/.config/cmdlog/filters.conf
 
 set -euo pipefail
 
 # Default config values
 DEFAULT_AUDIT_KEY="clawdbot_exec"
-DEFAULT_CONFIG_FILE="${HOME}/.config/cmdlog.conf"
-DEFAULT_FILTERS_FILE="${HOME}/.config/cmdlog.filters.conf"
+DEFAULT_CONFIG_FILE="${HOME}/.config/cmdlog/cmdlog.conf"
+DEFAULT_FILTERS_FILE="${HOME}/.config/cmdlog/filters.conf"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Runtime config (set by env vars, config file, or CLI)
@@ -350,9 +350,10 @@ if [ ! -f "$CONFIG_FILE" ] && [ ! -f "$DEFAULT_FILTERS_FILE" ]; then
     echo "Welcome to cmdlog! No config file found."
     echo ""
     echo "To get started:"
-    echo "  1. Copy config.sample to ~/.config/cmdlog.conf"
-    echo "  2. Customize your settings (optional)"
-    echo "  3. Create ~/.config/cmdlog.filters.conf for custom filters (optional)"
+    echo "  1. mkdir -p ~/.config/cmdlog"
+    echo "  2. Copy config.sample to ~/.config/cmdlog/cmdlog.conf"
+    echo "  3. Customize your settings (optional)"
+    echo "  4. Create ~/.config/cmdlog/filters.conf for custom filters (optional)"
     echo ""
     echo "Run 'cmdlog --help' for usage information."
     echo ""

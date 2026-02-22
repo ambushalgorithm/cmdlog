@@ -5,14 +5,15 @@ set -e
 
 # Create test filter file
 mkdir -p /home/testuser/.config
-cat > /home/testuser/.config/cmdlog.filters.conf << 'EOF'
+mkdir -p /home/testuser/.config/cmdlog
+cat > /home/testuser/.config/cmdlog/filters.conf << 'EOF'
 head
 tail
 wget.*169\.254
 EOF
 
 # Export env vars for test
-export CMDLOG_FILTERS_FILE="/home/testuser/.config/cmdlog.filters.conf"
+export CMDLOG_FILTERS_FILE="/home/testuser/.config/cmdlog/filters.conf"
 export HOME="/home/testuser"
 
 # Execute commands that should be filtered

@@ -29,7 +29,7 @@
 
 ```bash
 # 1. Copy config and customize
-cp config.sample ~/.config/cmdlog.conf
+cp config.sample ~/.config/cmdlog/cmdlog.conf
 
 # 2. View recent commands
 cmdlog
@@ -98,19 +98,19 @@ export PATH="$PATH:/path/to/cmdlog"
 ln -s /path/to/cmdlog/cmdlog /usr/local/bin/cmdlog
 ```
 
-First-run will prompt you to copy `config.sample` to `~/.config/cmdlog.conf`.
+First-run will prompt you to copy `config.sample` to `~/.config/cmdlog/cmdlog.conf`.
 
 ---
 
 ## ⚙️ Configuration
 
-**Config file:** `~/.config/cmdlog.conf`  
-**Filters:** `~/.config/cmdlog.filters.conf`
+**Config file:** `~/.config/cmdlog/cmdlog.conf`  
+**Filters:** `~/.config/cmdlog/filters.conf`
 
 ### Config Options
 
 ```bash
-# ~/.config/cmdlog.conf
+# ~/.config/cmdlog/cmdlog.conf
 AUDIT_KEY="clawdbot_exec"      # Must match your auditd -k flag
 DEFAULT_LIMIT=1000             # Default number of commands to show
 TZ="America/New_York"           # Timezone for timestamps
@@ -121,8 +121,8 @@ TZ="America/New_York"           # Timezone for timestamps
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CMDLOG_AUDIT_KEY` | Override audit key | From config |
-| `CMDLOG_CONFIG_FILE` | Override config path | `~/.config/cmdlog.conf` |
-| `CMDLOG_FILTERS_FILE` | Override filters path | `~/.config/cmdlog.filters.conf` |
+| `CMDLOG_CONFIG_FILE` | Override config path | `~/.config/cmdlog/cmdlog.conf` |
+| `CMDLOG_FILTERS_FILE` | Override filters path | `~/.config/cmdlog/filters.conf` |
 | `CMDLOG_DEFAULT_LIMIT` | Default limit | `1000` |
 | `CMDLOG_TZ` | Timezone | System default |
 | `CMDLOG_POLL_INTERVAL` | Live poll interval (sec) | `2` |
@@ -144,7 +144,7 @@ TZ="America/New_York"           # Timezone for timestamps
 Hide commands you don't want to see:
 
 ```bash
-# ~/.config/cmdlog.filters.conf
+# ~/.config/cmdlog/filters.conf
 # Add your patterns (one per line)
 
 # Hide internal scripts
@@ -167,7 +167,7 @@ curl.*metadata\.google\.internal
 
 **Filters are merged from:**
 1. `filters.conf` in script directory (defaults)
-2. `~/.config/cmdlog.filters.conf` (your custom)
+2. `~/.config/cmdlog/filters.conf` (your custom)
 
 View active filters:
 ```bash

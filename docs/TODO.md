@@ -3,7 +3,7 @@
 ## Config System
 
 - [x] Create config.sample with documented options
-- [x] Add config file reading (~/.config/cmdlog.conf)
+- [x] Add config file reading (~/.config/cmdlog/cmdlog.conf)
 - [x] Add env var overrides (CMDLOG_AUDIT_KEY, CMDLOG_USER, CMDLOG_CONFIG)
 - [x] Add CLI flags (--key, --user, --config)
 - [x] Update help text to remove "openclaw" references
