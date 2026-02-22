@@ -9,7 +9,13 @@ set -euo pipefail
 DEFAULT_AUDIT_KEY="clawdbot_exec"
 DEFAULT_CONFIG_FILE="${HOME}/.config/cmdlog/cmdlog.conf"
 DEFAULT_FILTERS_FILE="${HOME}/.config/cmdlog/filters.conf"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve symlinks to get actual script directory
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_SOURCE" ]; do
+    SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+    [[ "$SCRIPT_SOURCE" != /* ]] && SCRIPT_SOURCE="$(dirname "$SCRIPT_SOURCE")/$SCRIPT_SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 
 # Runtime config (set by env vars, config file, or CLI)
 AUDIT_KEY="${CMDLOG_AUDIT_KEY:-}"
@@ -146,22 +152,19 @@ show_filters() {
     local repo_filters="${SCRIPT_DIR}/filters.conf"
     local user_filters="${FILTERS_FILE:-${DEFAULT_FILTERS_FILE}}"
     
-    echo "=== Built-in Filters ==="
-    echo "Shell utilities (standalone): grep, tail, head, awk, sed, cat, tee, sort,"
-    echo "  date, sudo, ip, locale, timedatectl, xxd, printf, seq, comm, tr, uniq,"
-    echo "  tac, wc, python3, jq, env, ssh, flock, sleep, mktemp"
-    echo ""
-    
-    # Show repo filters
+    # Show built-in filters (from script directory)
     if [ -f "$repo_filters" ]; then
-        echo "=== Repo Filters (${repo_filters}) ==="
+        echo "=== Built-in Filters (${repo_filters}) ==="
         local repo_filter_lines
-        repo_filter_lines=$(grep -v '^#' "$repo_filters" 2>/dev/null | grep -v '^$' || true)
+        repo_filter_lines=$(grep -v '^#' "$repo_filters" 2>/dev/null | grep -v '^$' | grep -v '^===' || true)
         if [ -n "$repo_filter_lines" ]; then
             echo "$repo_filter_lines" | nl
         else
             echo "  (none configured)"
         fi
+    else
+        echo "=== Built-in Filters ==="
+        echo "  (no filters.conf found in script directory)"
     fi
     echo ""
     
