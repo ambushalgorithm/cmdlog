@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/ambushalgorithm/cmdlog" alt="License">
+  <img src="https://img.shields.io/github/license/ambushalgorithm/cmdlog?cacheSeconds=3600" alt="License">
   <img src="https://img.shields.io/github/actions/workflow/status/ambushalgorithm/cmdlog/tests.yml?label=Tests" alt="Tests">
 </p>
 
