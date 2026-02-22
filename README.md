@@ -31,6 +31,7 @@
 # 1. Copy config and customize
 mkdir -p ~/.config/cmdlog
 cp config.sample ~/.config/cmdlog/cmdlog.conf
+cp filters.conf ~/.config/cmdlog/filters.conf
 
 # 2. View recent commands
 cmdlog
