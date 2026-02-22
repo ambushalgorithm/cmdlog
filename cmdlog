@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Runtime config (set by env vars, config file, or CLI)
 AUDIT_KEY="${CMDLOG_AUDIT_KEY:-}"
 CONFIG_FILE="${CMDLOG_CONFIG_FILE:-}"
-FILTERS_FILE="${CMDLOG_FILTERS_FILE:-}"
+FILTERS_FILE="${CMDLOG_FILTERS_FILE:-${HOME}/.config/cmdlog/filters.conf}"
 DEFAULT_LIMIT="${CMDLOG_DEFAULT_LIMIT:-1000}"
 TZ="${CMDLOG_TZ:-$(cat /etc/timezone 2>/dev/null || echo "America/Bogota")}"
 POLL_INTERVAL="${CMDLOG_POLL_INTERVAL:-2}"
@@ -40,7 +40,7 @@ parse_config() {
             AUDIT_KEY)     AUDIT_KEY="${value}" ;;
             DEFAULT_LIMIT) DEFAULT_LIMIT="${value}" ;;
             TZ)            TZ="${value}" ;;
-            FILTERS_FILE)  FILTERS_FILE="${value}" ;;
+            FILTERS_FILE)  FILTERS_FILE="${value//\~/$HOME}" ;
         esac
     done < "$config_file"
 }
