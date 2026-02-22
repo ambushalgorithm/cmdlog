@@ -4,7 +4,6 @@
 
 # =============================================================================
 # Built-in filters are defined in filters.conf in the script directory
-# (/home/clawdbot/Projects/cmdlog/filters.conf)
 # =============================================================================
 
 # Add your custom filter patterns below:
