@@ -29,6 +29,7 @@
 
 ```bash
 # 1. Copy config and customize
+mkdir -p ~/.config/cmdlog
 cp config.sample ~/.config/cmdlog/cmdlog.conf
 
 # 2. View recent commands
