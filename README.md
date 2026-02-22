@@ -102,6 +102,10 @@ export PATH="$PATH:/path/to/cmdlog"
 
 # Or symlink to /usr/local/bin
 ln -s /path/to/cmdlog/cmdlog /usr/local/bin/cmdlog
+
+# Optional: Source aliases for shorter commands
+source /path/to/cmdlog/aliases.sh
+# Adds: cmdlog-recent, cmdlog-today, cmdlog-search, cmdlog-live, cmdlog-raw
 ```
 
 First-run will prompt you to copy `config.sample` to `~/.config/cmdlog/cmdlog.conf`.
